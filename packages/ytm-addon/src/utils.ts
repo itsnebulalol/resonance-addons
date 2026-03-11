@@ -4,7 +4,7 @@ export { corsHeaders, errorResponse, formatDuration, json } from "@resonance-add
 
 import { parseConfig as decodeConfig } from "@resonance-addons/shared";
 
-const PROVIDER_ID = "com.resonance.ytm-remote";
+const PROVIDER_ID = "com.resonance.ytm";
 export { PROVIDER_ID };
 
 export function parseConfig(configStr: string): AddonConfig {

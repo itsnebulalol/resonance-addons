@@ -12,7 +12,7 @@ export function handleManifest(baseURL: string, configStr: string | null): Respo
     },
     transport: { remote: configStr ? `${baseURL}/${configStr}` : baseURL },
     resources: [
-      { type: "stream", idPrefixes: ["ytm"] },
+      { type: "stream", idPrefixes: [PROVIDER_ID] },
       {
         type: "catalog",
         catalogs: [
