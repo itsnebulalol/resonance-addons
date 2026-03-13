@@ -44,6 +44,41 @@
     .steps strong { color: #ccc; }
     .steps code { display: inline; padding: 2px 4px; background: #0f0f0f; border-radius: 3px; }
     .steps a { color: #1DB954; }
+    .donate a {
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+      margin-top: 1rem; padding: 0.85rem 1rem; text-align: center;
+      background: #1a1a1a; border: 1px solid #333; border-radius: 10px;
+      font-size: 0.95rem; font-weight: 600; color: #fff; text-decoration: none;
+      -webkit-tap-highlight-color: transparent; transition: background 0.15s, border-color 0.15s;
+    }
+    .donate a:hover, .donate a:active { background: #252525; border-color: #1DB954; }
+    .donate svg { flex-shrink: 0; }
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex;
+      align-items: center; justify-content: center; z-index: 100; opacity: 0;
+      visibility: hidden; transition: opacity 0.2s, visibility 0.2s; padding: 1rem;
+    }
+    .modal-overlay.show { opacity: 1; visibility: visible; }
+    .modal {
+      background: #1a1a1a; border: 1px solid #333; border-radius: 14px;
+      max-width: 360px; width: 100%; padding: 2rem 1.5rem; text-align: center;
+    }
+    .modal-heart { margin-bottom: 1rem; }
+    .modal h2 { font-size: 1.2rem; color: #fff; margin-bottom: 0.5rem; }
+    .modal p { font-size: 0.85rem; color: #aaa; line-height: 1.5; margin-bottom: 1.25rem; }
+    .modal-sponsor {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.7rem 1.5rem; background: #1DB954; color: #fff;
+      border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600;
+      text-decoration: none; transition: background 0.15s;
+    }
+    .modal-sponsor:hover { background: #1aa34a; }
+    .modal-dismiss {
+      display: block; margin-top: 0.75rem; font-size: 0.8rem; color: #666;
+      cursor: pointer; background: none; border: none; font-family: inherit;
+    }
+    .modal-dismiss, .modal-dismiss:hover { background: none; }
+    .modal-dismiss:hover { color: #888; }
   </style>
 </head>
 <body>
@@ -68,6 +103,23 @@
       2. Open DevTools (F12) > Application > Cookies > <code>https://open.spotify.com</code><br>
       3. Find <code>sp_dc</code> and copy its value
     </div>
+
+    <p class="donate"><a href="https://github.com/sponsors/itsnebulalol" target="_blank"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="#1DB954"><path d="M7.655 14.916v-.001h-.002l-.006-.003-.018-.01a7 7 0 0 1-.31-.17 22 22 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.044 5.231-3.886 6.818a22 22 0 0 1-3.433 2.414 14 14 0 0 1-.31.17l-.018.01-.006.003h-.002A.5.5 0 0 1 8 14.5a.5.5 0 0 1-.345.416z"/></svg> Support Addon Development</a></p>
+  </div>
+
+  <div class="modal-overlay" id="donateModal">
+    <div class="modal">
+      <div class="modal-heart">
+        <svg aria-hidden="true" width="32" height="32" viewBox="0 0 16 16" fill="#1DB954"><path d="M7.655 14.916v-.001h-.002l-.006-.003-.018-.01a7 7 0 0 1-.31-.17 22 22 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.044 5.231-3.886 6.818a22 22 0 0 1-3.433 2.414 14 14 0 0 1-.31.17l-.018.01-.006.003h-.002A.5.5 0 0 1 8 14.5a.5.5 0 0 1-.345.416z"/></svg>
+      </div>
+      <h2>Support Addon Development</h2>
+      <p>If you enjoy this addon, consider sponsoring to help keep it running and maintained.</p>
+      <a class="modal-sponsor" href="https://github.com/sponsors/itsnebulalol" target="_blank">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M7.655 14.916v-.001h-.002l-.006-.003-.018-.01a7 7 0 0 1-.31-.17 22 22 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.044 5.231-3.886 6.818a22 22 0 0 1-3.433 2.414 14 14 0 0 1-.31.17l-.018.01-.006.003h-.002A.5.5 0 0 1 8 14.5a.5.5 0 0 1-.345.416z"/></svg>
+        Sponsor on GitHub
+      </a>
+      <button type="button" class="modal-dismiss" id="modalDismiss">Maybe later</button>
+    </div>
   </div>
 
   <script>
@@ -86,7 +138,12 @@
       const url = `{{BASE_URL}}/${encoded}/manifest.json`;
       urlEl.textContent = url;
       resultEl.classList.add("show");
+      document.getElementById("donateModal").classList.add("show");
     });
+
+    const modal = document.getElementById("donateModal");
+    document.getElementById("modalDismiss").addEventListener("click", () => modal.classList.remove("show"));
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("show"); });
   </script>
 </body>
 </html>
