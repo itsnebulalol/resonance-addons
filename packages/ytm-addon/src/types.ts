@@ -186,4 +186,6 @@ export interface LyricsData {
 export interface AddonConfig {
   refreshToken: string;
   cookies?: string;
+  region?: string;
+  language?: string;
 }

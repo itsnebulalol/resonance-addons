@@ -1,7 +1,20 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 const CLIENT_ID = "755973059757-iigsfdoqt2c4qm209soqp2dlrh33almr.apps.googleusercontent.com";
 const TOKEN_URL = "https://oauthaccountmanager.googleapis.com/v1/issuetoken";
 const INNERTUBE_BASE = "https://music.youtube.com/youtubei/v1";
 const MOBILE_UA = "com.google.ios.youtubemusic/6.49 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)";
+
+interface RegionContext {
+  gl: string;
+  hl: string;
+}
+
+const regionStore = new AsyncLocalStorage<RegionContext>();
+
+export function runWithRegion<T>(gl: string, hl: string, fn: () => T): T {
+  return regionStore.run({ gl, hl }, fn);
+}
 
 const tokenCache = new Map<string, { token: string; expires: number }>();
 
@@ -64,26 +77,29 @@ export async function mintAccessToken(refreshToken: string): Promise<string> {
   return data.token;
 }
 
-const IOS_CONTEXT = {
-  client: {
-    clientName: "IOS_MUSIC",
-    clientVersion: "6.49",
-    hl: "en",
-    gl: "US",
-    platform: "MOBILE",
-    osName: "iOS",
-    osVersion: "18.3.2",
-    deviceMake: "Apple",
-    deviceModel: "iPhone16,2",
-  },
-  user: { lockedSafetyMode: false },
-};
+function getIOSContext() {
+  const region = regionStore.getStore() ?? { gl: "US", hl: "en" };
+  return {
+    client: {
+      clientName: "IOS_MUSIC",
+      clientVersion: "6.49",
+      hl: region.hl,
+      gl: region.gl,
+      platform: "MOBILE",
+      osName: "iOS",
+      osVersion: "18.3.2",
+      deviceMake: "Apple",
+      deviceModel: "iPhone16,2",
+    },
+    user: { lockedSafetyMode: false },
+  };
+}
 
 export async function ytFetch(endpoint: string, refreshToken: string, body: Record<string, any> = {}): Promise<any> {
   const accessToken = await mintAccessToken(refreshToken);
 
   const fullBody = {
-    context: IOS_CONTEXT,
+    context: getIOSContext(),
     ...body,
   };
 
