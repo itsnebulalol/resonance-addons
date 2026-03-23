@@ -1,3 +1,11 @@
+import {
+  handleOnDeviceFetchReplayUpload,
+  isOnDeviceFetchRequiredError,
+  recoverOnDeviceFetchResponse,
+  responseForOnDeviceFetchMarker,
+  responseForOnDeviceFetchRequired,
+  runWithOnDeviceFetchContext,
+} from "./on-device-fetch";
 import { corsHeaders, errorResponse, json, parseConfig } from "./response";
 import type { AddonOptions } from "./types";
 
@@ -70,6 +78,10 @@ export function createAddon<T>(options: AddonOptions<T>) {
       behaviorHints: { configurable: true, configurationRequired: true },
       capabilities,
     };
+
+    if (options.onDeviceFetchHosts?.length) {
+      manifest.onDeviceFetchHosts = options.onDeviceFetchHosts;
+    }
 
     return json(manifest);
   }
@@ -173,6 +185,10 @@ export function createAddon<T>(options: AddonOptions<T>) {
     }
 
     if (req.method === "POST") {
+      if (route === "/_resonance/on-device-fetch-response") {
+        return handleOnDeviceFetchReplayUpload(req);
+      }
+
       if (route === "/queue/action" && options.queue) {
         const body = await req.json();
         return options.queue.action(config, body);
@@ -261,11 +277,21 @@ export function createAddon<T>(options: AddonOptions<T>) {
           const handler = () => handleRoute(config, route, req, url);
 
           try {
-            if (options.wrapRequest) {
-              return await options.wrapRequest(config, handler);
-            }
-            return await handler();
+            const response = await runWithOnDeviceFetchContext(req, async () => {
+              if (options.wrapRequest) {
+                return await options.wrapRequest(config, handler);
+              }
+              return await handler();
+            });
+            return await recoverOnDeviceFetchResponse(response);
           } catch (e: any) {
+            if (isOnDeviceFetchRequiredError(e)) {
+              return responseForOnDeviceFetchRequired(e);
+            }
+            const markerResponse = responseForOnDeviceFetchMarker(e?.message);
+            if (markerResponse) {
+              return markerResponse;
+            }
             console.error(`[${options.id}] Unhandled error:`, e.message);
             return errorResponse(e.message, 500);
           }

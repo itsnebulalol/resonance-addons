@@ -1,6 +1,6 @@
 import { ytFetch } from "../auth";
 import type { SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem, Track } from "../types";
-import { errorResponse, json, PROVIDER_ID } from "../utils";
+import { errorResponse, isOnDeviceFetchSignal, json, PROVIDER_ID } from "../utils";
 
 const filterParams: Record<string, string> = {
   songs: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
@@ -73,6 +73,9 @@ export async function handleSearchSuggestions(refreshToken: string, query: strin
 
     return json(texts);
   } catch (e: any) {
+    if (isOnDeviceFetchSignal(e)) {
+      throw e;
+    }
     console.error("Search suggestions error:", e.message);
     return json([]);
   }
@@ -193,7 +196,11 @@ export async function lookupAlbumId(refreshToken: string, query: string, videoId
         }
       }
     }
-  } catch {}
+  } catch (e) {
+    if (isOnDeviceFetchSignal(e)) {
+      throw e;
+    }
+  }
   return null;
 }
 

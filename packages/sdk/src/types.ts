@@ -107,6 +107,7 @@ export interface AddonOptions<T> {
 
   capabilities?: Partial<Capabilities>;
   configurePage?: string;
+  onDeviceFetchHosts?: string[];
 
   parseConfig: (raw: Record<string, any>) => T;
   wrapRequest?: (config: T, handler: () => Promise<Response>) => Promise<Response>;

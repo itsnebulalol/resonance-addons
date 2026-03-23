@@ -56,6 +56,7 @@ const addon = createAddon<YTMConfig>({
   },
 
   configurePage: `${import.meta.dir}/../templates/configure.html`,
+  onDeviceFetchHosts: ["oauthaccountmanager.googleapis.com", "music.youtube.com"],
 
   parseConfig: (raw) => {
     if (!raw.refreshToken) throw new Error("Missing refreshToken");

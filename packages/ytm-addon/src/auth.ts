@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { onDeviceFetch } from "@resonance-addons/sdk";
 
 const CLIENT_ID = "755973059757-iigsfdoqt2c4qm209soqp2dlrh33almr.apps.googleusercontent.com";
 const TOKEN_URL = "https://oauthaccountmanager.googleapis.com/v1/issuetoken";
@@ -17,8 +18,54 @@ export function runWithRegion<T>(gl: string, hl: string, fn: () => T): T {
 }
 
 const tokenCache = new Map<string, { token: string; expires: number }>();
+const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
+
+const RESPONSE_CACHE_TTL_MS = 15_000;
+const RESPONSE_CACHE_MAX_ENTRIES = 32;
 
 const deviceIds = new Map<string, string>();
+
+function makeResponseCacheKey(refreshToken: string, endpoint: string, body: Record<string, any>): string {
+  return `${refreshToken}::${endpoint}::${JSON.stringify(body)}`;
+}
+
+function pruneResponseCache(now = Date.now()): void {
+  for (const [key, entry] of responseCache.entries()) {
+    if (entry.expiresAt <= now) {
+      responseCache.delete(key);
+    }
+  }
+
+  while (responseCache.size > RESPONSE_CACHE_MAX_ENTRIES) {
+    const oldest = responseCache.keys().next().value;
+    if (!oldest) {
+      break;
+    }
+    responseCache.delete(oldest);
+  }
+}
+
+function getCachedResponse(key: string): unknown | undefined {
+  const entry = responseCache.get(key);
+  if (!entry) {
+    return undefined;
+  }
+  if (entry.expiresAt <= Date.now()) {
+    responseCache.delete(key);
+    return undefined;
+  }
+  return structuredClone(entry.data);
+}
+
+function setCachedResponse(key: string, data: unknown): void {
+  pruneResponseCache();
+  responseCache.delete(key);
+  responseCache.set(key, {
+    data: structuredClone(data),
+    expiresAt: Date.now() + RESPONSE_CACHE_TTL_MS,
+  });
+  pruneResponseCache();
+}
 
 function getDeviceId(refreshToken: string): string {
   let id = deviceIds.get(refreshToken);
@@ -49,7 +96,7 @@ export async function mintAccessToken(refreshToken: string): Promise<string> {
     scope: scopes,
   });
 
-  const res = await fetch(TOKEN_URL, {
+  const res = await onDeviceFetch(TOKEN_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -59,6 +106,7 @@ export async function mintAccessToken(refreshToken: string): Promise<string> {
       Accept: "*/*",
     },
     body: body.toString(),
+    timeoutMs: 15_000,
   });
 
   if (!res.ok) {
@@ -103,7 +151,13 @@ export async function ytFetch(endpoint: string, refreshToken: string, body: Reco
     ...body,
   };
 
-  const res = await fetch(`${INNERTUBE_BASE}/${endpoint}?prettyPrint=false`, {
+  const cacheKey = makeResponseCacheKey(refreshToken, endpoint, fullBody);
+  const cached = getCachedResponse(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const res = await onDeviceFetch(`${INNERTUBE_BASE}/${endpoint}?prettyPrint=false`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -111,6 +165,7 @@ export async function ytFetch(endpoint: string, refreshToken: string, body: Reco
       Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify(fullBody),
+    timeoutMs: 20_000,
   });
 
   if (!res.ok) {
@@ -118,5 +173,7 @@ export async function ytFetch(endpoint: string, refreshToken: string, body: Reco
     throw new Error(`InnerTube ${endpoint} failed (${res.status}): ${text.slice(0, 200)}`);
   }
 
-  return res.json();
+  const parsed = await res.json();
+  setCachedResponse(cacheKey, parsed);
+  return parsed;
 }

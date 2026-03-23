@@ -1,6 +1,6 @@
 import { ytFetch } from "../auth";
 import type { CatalogPage, HomeItem, HomeSection, QuickAccessItem } from "../types";
-import { errorResponse, json, PROVIDER_ID } from "../utils";
+import { errorResponse, isOnDeviceFetchSignal, json, PROVIDER_ID } from "../utils";
 import { lookupAlbumId } from "./search";
 
 export async function handleHome(refreshToken: string, continuation?: string): Promise<Response> {
@@ -65,6 +65,9 @@ export async function handleHome(refreshToken: string, continuation?: string): P
               ?.continuation ?? null;
           if (contSections.length === 0) break;
         } catch (e: any) {
+          if (isOnDeviceFetchSignal(e)) {
+            throw e;
+          }
           console.error("[catalog] Continuation error:", e.message);
           break;
         }
