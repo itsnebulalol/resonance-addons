@@ -1,12 +1,6 @@
-export { corsHeaders, errorResponse, json } from "@resonance-addons/shared";
-
-import { parseConfig as decodeConfig } from "@resonance-addons/shared";
+export { corsHeaders, errorResponse, json } from "@resonance-addons/sdk";
 
 export const PROVIDER_ID = "com.resonance.spotify";
-
-export interface AddonConfig {
-  spDc: string;
-}
 
 export function uriToId(uri: string): string {
   return uri.split(":").pop() ?? uri;
@@ -28,10 +22,4 @@ export function formatDurationSec(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-export function parseConfig(configStr: string): AddonConfig {
-  const config = decodeConfig<AddonConfig>(configStr);
-  if (!config.spDc) throw new Error("Missing spDc in config");
-  return config;
 }

@@ -1,79 +1,51 @@
-import { handleConfigure } from "./configure";
+import { createAddon } from "@resonance-addons/sdk";
 import { handleLyrics } from "./routes/lyrics";
-import { handleManifest } from "./routes/manifest";
 import { handleMetadata } from "./routes/metadata";
 import { setUserToken } from "./token";
-import { corsHeaders, errorResponse, json, parseConfig } from "./utils";
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
 
-function getBaseURL(req: Request): string {
-  const host = req.headers.get("host") ?? `localhost:${PORT}`;
-  const proto = req.headers.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+interface AMConfig {
+  userToken: string;
 }
 
-Bun.serve({
-  port: PORT,
-  async fetch(req) {
-    const url = new URL(req.url);
-    const path = url.pathname;
+const addon = createAddon<AMConfig>({
+  id: "com.resonance.am-lyrics-remote",
+  name: "Apple Music Enhancements",
+  description: "Lyrics, metadata, and artwork from Apple Music",
+  version: "1.0.0",
+  icon: { type: "bundled", value: "applemusic" },
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+  auth: {
+    label: "Enter your Media User Token. See /configure for instructions.",
+    fields: [
+      {
+        key: "userToken",
+        type: "password",
+        title: "Media User Token",
+        placeholder: "Paste your Media User Token here",
+        isRequired: true,
+      },
+    ],
+  },
 
-    if (path === "/" || path === "/configure") {
-      return handleConfigure(getBaseURL(req));
-    }
+  configurePage: `${import.meta.dir}/../templates/configure.html`,
 
-    if (path === "/health") {
-      return json({ status: "ok" });
-    }
+  parseConfig: (raw) => {
+    if (!raw.userToken) throw new Error("Missing userToken");
+    return { userToken: raw.userToken as string };
+  },
 
-    if (req.method === "GET" && path === "/manifest.json") {
-      return handleManifest(getBaseURL(req), null);
-    }
+  onConfig: (config) => setUserToken(config.userToken),
 
-    const match = path.match(/^\/([^/]+)(\/.*)?$/);
-    if (!match) {
-      return errorResponse("Not found", 404);
-    }
+  lyrics: {
+    syncTypes: ["wordSynced", "lineSynced"],
+    handler: (_config, params) => handleLyrics(params.title, params.artist, params.videoId),
+  },
 
-    const configStr = match[1]!;
-    const route = match[2] ?? "/";
-
-    let config;
-    try {
-      config = parseConfig(configStr);
-    } catch {
-      return errorResponse("Invalid config in URL — configure at /configure", 400);
-    }
-
-    setUserToken(config.userToken);
-
-    const baseURL = getBaseURL(req);
-
-    if (route === "/manifest.json") {
-      return handleManifest(baseURL, configStr);
-    }
-
-    if (route === "/lyrics.json") {
-      const title = url.searchParams.get("title") ?? undefined;
-      const artist = url.searchParams.get("artist") ?? undefined;
-      const videoId = url.searchParams.get("videoId") ?? undefined;
-      return handleLyrics(title, artist, videoId);
-    }
-
-    if (route === "/metadata.json") {
-      const title = url.searchParams.get("title") ?? undefined;
-      const artist = url.searchParams.get("artist") ?? undefined;
-      return handleMetadata(title, artist);
-    }
-
-    return errorResponse("Not found", 404);
+  metadata: {
+    handler: (_config, params) => handleMetadata(params.title, params.artist),
   },
 });
 
-console.log(`AM addon server running on http://localhost:${PORT}`);
-console.log(`Configure at http://localhost:${PORT}/configure`);
+addon.listen(PORT);

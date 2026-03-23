@@ -1,87 +1,91 @@
-import { handleConfigure } from "./configure";
-import { handleManifest } from "./routes/manifest";
+import { createAddon, json } from "@resonance-addons/sdk";
 import { handleSearch } from "./routes/search";
 import { handleStream } from "./routes/stream";
-import { corsHeaders, errorResponse, json, parseConfig } from "./utils";
 
+const PROVIDER_ID = "com.resonance.torbox";
 const PORT = parseInt(process.env.PORT ?? "3003", 10);
 
-function getBaseURL(req: Request): string {
-  const host = req.headers.get("host") ?? `localhost:${PORT}`;
-  const proto = req.headers.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+interface TorBoxConfig {
+  apiKey: string;
+  allowUncached: boolean;
 }
 
-Bun.serve({
-  port: PORT,
-  async fetch(req) {
-    const url = new URL(req.url);
-    const path = url.pathname;
+const addon = createAddon<TorBoxConfig>({
+  id: PROVIDER_ID,
+  name: "TorBox",
+  description: "Stream music from cached torrents via TorBox",
+  version: "1.0.0",
+  icon: { type: "remote", value: "https://torbox.app/favicon.ico" },
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+  auth: {
+    label: "Enter your TorBox API key from torbox.app/settings",
+    fields: [
+      {
+        key: "apiKey",
+        type: "password",
+        title: "TorBox API Key",
+        placeholder: "Paste your TorBox API key",
+        isRequired: true,
+      },
+      {
+        key: "allowUncached",
+        type: "toggle",
+        title: "Download uncached torrents",
+        placeholder: "Queue uncached torrents so they are ready next time",
+        isRequired: false,
+      },
+    ],
+  },
 
-    if (path === "/" || path === "/configure") {
-      return handleConfigure(getBaseURL(req));
-    }
+  configurePage: `${import.meta.dir}/../templates/configure.html`,
 
-    if (path === "/health") {
-      return json({ status: "ok" });
-    }
+  parseConfig: (raw) => {
+    if (!raw.apiKey) throw new Error("Missing apiKey");
+    let allowUncached = raw.allowUncached ?? false;
+    if (typeof allowUncached === "string") allowUncached = allowUncached === "true";
+    return { apiKey: raw.apiKey as string, allowUncached: !!allowUncached };
+  },
 
-    if (req.method === "GET" && path === "/manifest.json") {
-      return handleManifest(getBaseURL(req), null);
-    }
+  stream: {
+    idPrefixes: [PROVIDER_ID],
+    handler: (config, id) => handleStream(config.apiKey, id, config.allowUncached),
+  },
 
-    const match = path.match(/^\/([^/]+)(\/.*)?$/);
-    if (!match) {
-      return errorResponse("Not found", 404);
-    }
+  catalog: {
+    home: {
+      name: "Home",
+      manifest: false,
+      handler: () => Promise.resolve(json({ sections: [], filters: [] })),
+    },
+    library: {
+      name: "Library",
+      manifest: false,
+      handler: () => Promise.resolve(json({ sections: [], filters: [] })),
+    },
+  },
 
-    const configStr = match[1]!;
-    const route = match[2] ?? "/";
+  search: {
+    handler: (config, query, filter, url) => {
+      const context = {
+        title: url.searchParams.get("title") ?? undefined,
+        artist: url.searchParams.get("artist") ?? undefined,
+        album: url.searchParams.get("album") ?? undefined,
+      };
+      return handleSearch(config.apiKey, query, filter, context);
+    },
+  },
 
-    let config;
-    try {
-      config = parseConfig(configStr);
-    } catch {
-      return errorResponse("Invalid config in URL — configure at /configure", 400);
-    }
-
-    const baseURL = getBaseURL(req);
-    const { apiKey } = config;
-
-    if (route === "/manifest.json") {
-      return handleManifest(baseURL, configStr);
-    }
-
-    if (req.method === "GET") {
-      if (route === "/catalog/home.json" || route === "/catalog/library.json") {
-        return json({ sections: [], filters: [] });
-      }
-
-      if (route === "/search.json") {
-        const q = url.searchParams.get("q");
-        if (!q) return errorResponse("Missing query parameter 'q'", 400);
-        const filter = url.searchParams.get("filter") ?? undefined;
-        const context = {
-          title: url.searchParams.get("title") ?? undefined,
-          artist: url.searchParams.get("artist") ?? undefined,
-          album: url.searchParams.get("album") ?? undefined,
-        };
-        return handleSearch(apiKey, q, filter, context);
-      }
-
-      const streamMatch = route.match(/^\/stream\/([^/]+)\.json$/);
-      if (streamMatch?.[1]) {
-        return handleStream(apiKey, streamMatch[1], config.allowUncached ?? false);
-      }
-    }
-
-    return errorResponse("Not found", 404);
+  capabilities: {
+    supportsRadio: false,
+    supportsQueueActions: false,
+    supportsContinuation: false,
+    supportsSearchSuggestions: false,
+    supportsLikeStatus: false,
+    supportsAddToPlaylist: false,
+    supportsFilters: false,
+    supportsQuickAccess: false,
+    supportsRelated: false,
   },
 });
 
-console.log(`TorBox addon server running on http://localhost:${PORT}`);
-console.log(`Configure at http://localhost:${PORT}/configure`);
+addon.listen(PORT);

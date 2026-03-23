@@ -8,7 +8,7 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@resonance-addons/shared": "workspace:*",
+    "@resonance-addons/sdk": "workspace:*",
     "cuimp": "^1.10.0"
   }
 }

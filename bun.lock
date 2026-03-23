@@ -15,8 +15,11 @@
     "packages/am-addon": {
       "name": "@resonance-addons/am-addon",
       "dependencies": {
-        "@resonance-addons/shared": "workspace:*",
+        "@resonance-addons/sdk": "workspace:*",
       },
+    },
+    "packages/sdk": {
+      "name": "@resonance-addons/sdk",
     },
     "packages/shared": {
       "name": "@resonance-addons/shared",
@@ -24,20 +27,20 @@
     "packages/spotify-addon": {
       "name": "@resonance-addons/spotify-addon",
       "dependencies": {
-        "@resonance-addons/shared": "workspace:*",
+        "@resonance-addons/sdk": "workspace:*",
         "cuimp": "^1.10.0",
       },
     },
     "packages/torbox-addon": {
       "name": "@resonance-addons/torbox-addon",
       "dependencies": {
-        "@resonance-addons/shared": "workspace:*",
+        "@resonance-addons/sdk": "workspace:*",
       },
     },
     "packages/ytm-addon": {
       "name": "@resonance-addons/ytm-addon",
       "dependencies": {
-        "@resonance-addons/shared": "workspace:*",
+        "@resonance-addons/sdk": "workspace:*",
       },
     },
   },
@@ -63,6 +66,8 @@
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
 
     "@resonance-addons/am-addon": ["@resonance-addons/am-addon@workspace:packages/am-addon"],
+
+    "@resonance-addons/sdk": ["@resonance-addons/sdk@workspace:packages/sdk"],
 
     "@resonance-addons/shared": ["@resonance-addons/shared@workspace:packages/shared"],
 

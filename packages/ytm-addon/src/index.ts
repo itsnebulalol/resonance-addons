@@ -1,182 +1,135 @@
+import { createAddon } from "@resonance-addons/sdk";
 import { runWithRegion } from "./auth";
-import { handleConfigure } from "./configure";
 import { handleAlbum } from "./routes/album";
 import { handleArtist } from "./routes/artist";
 import { handleHome } from "./routes/catalog";
 import { handleLibrary } from "./routes/library";
 import { handleLyrics } from "./routes/lyrics";
-import { handleManifest } from "./routes/manifest";
 import { handleAddToPlaylist, handleLike } from "./routes/mutations";
 import { handlePlaylist, handlePlaylistMore } from "./routes/playlist";
 import { handleQueueAction, handleQueueMore, handleQueueStart } from "./routes/queue";
 import { handleRelated, handleRelatedForTrack } from "./routes/related";
 import { handleSearch, handleSearchSuggestions } from "./routes/search";
 import { handleStream } from "./routes/stream";
-import { corsHeaders, errorResponse, json, parseConfig } from "./utils";
 
+const PROVIDER_ID = "com.resonance.ytm";
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 
-function getBaseURL(req: Request): string {
-  const host = req.headers.get("host") ?? `localhost:${PORT}`;
-  const proto = req.headers.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+interface YTMConfig {
+  refreshToken: string;
+  gl: string;
+  hl: string;
 }
 
-Bun.serve({
-  port: PORT,
-  async fetch(req) {
-    const url = new URL(req.url);
-    const path = url.pathname;
+const addon = createAddon<YTMConfig>({
+  id: PROVIDER_ID,
+  name: "YouTube Music",
+  description: "Stream and browse your YouTube Music library",
+  version: "1.0.0",
+  icon: { type: "remote", value: "https://i.postimg.cc/KjDMdWyX/You-Tube-Music-2024-svg.png" },
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+  auth: {
+    label: "Enter your Google OAuth refresh token. See the addon's /configure page for instructions.",
+    fields: [
+      {
+        key: "refreshToken",
+        type: "password",
+        title: "Google OAuth Refresh Token",
+        placeholder: "Paste your refresh token here",
+        isRequired: true,
+      },
+      {
+        key: "region",
+        type: "text",
+        title: "Region",
+        placeholder: "US",
+        isRequired: false,
+      },
+      {
+        key: "language",
+        type: "text",
+        title: "Language",
+        placeholder: "en",
+        isRequired: false,
+      },
+    ],
+  },
 
-    if (path === "/" || path === "/configure") {
-      return handleConfigure(getBaseURL(req));
-    }
+  configurePage: `${import.meta.dir}/../templates/configure.html`,
 
-    if (path === "/health") {
-      return json({ status: "ok" });
-    }
+  parseConfig: (raw) => {
+    if (!raw.refreshToken) throw new Error("Missing refreshToken");
+    return {
+      refreshToken: raw.refreshToken as string,
+      gl: (raw.region as string) ?? "US",
+      hl: (raw.language as string) ?? "en",
+    };
+  },
 
-    if (req.method === "GET" && path === "/manifest.json") {
-      return handleManifest(getBaseURL(req), null);
-    }
+  wrapRequest: (config, handler) => runWithRegion(config.gl, config.hl, handler),
 
-    const match = path.match(/^\/([^/]+)(\/.*)?$/);
-    if (match?.[2]) {
-      console.log(`[router] ${req.method} ${match[2]}`);
-    }
-    if (!match) {
-      return errorResponse("Not found", 404);
-    }
+  stream: {
+    idPrefixes: [PROVIDER_ID],
+    handler: (config, id) => handleStream(config.refreshToken, id),
+  },
 
-    const configStr = match[1]!;
-    const route = match[2] ?? "/";
+  catalog: {
+    home: {
+      name: "Home",
+      isDefault: true,
+      handler: (config, params) => handleHome(config.refreshToken, params.continuation),
+    },
+    library: {
+      name: "Library",
+      handler: (config, params) => handleLibrary(config.refreshToken, params.type, params.continuation),
+    },
+  },
 
-    let config;
-    try {
-      config = parseConfig(configStr);
-    } catch {
-      return errorResponse("Invalid config in URL — configure at /configure", 400);
-    }
+  search: {
+    handler: (config, query, filter) => handleSearch(config.refreshToken, query, filter),
+    suggestions: (config, query) => handleSearchSuggestions(config.refreshToken, query),
+  },
 
-    const baseURL = getBaseURL(req);
-    const rt = config.refreshToken;
-    const gl = config.region ?? "US";
-    const hl = config.language ?? "en";
+  lyrics: {
+    syncTypes: ["lineSynced", "unsynced"],
+    handler: (config, params) => handleLyrics(config.refreshToken, params.videoId, params.title, params.artist),
+  },
 
-    if (req.method === "GET" && route === "/manifest.json") {
-      return handleManifest(baseURL, configStr);
-    }
+  album: (config, id) => handleAlbum(config.refreshToken, id),
+  artist: (config, id) => handleArtist(config.refreshToken, id),
 
-    return runWithRegion(gl, hl, async () => {
-      // GET routes
-      if (req.method === "GET") {
-        if (route === "/catalog/home.json") {
-          const cont = url.searchParams.get("continuation") ?? undefined;
-          return handleHome(rt, cont);
-        }
+  playlist: {
+    handler: (config, id) => handlePlaylist(config.refreshToken, id),
+    more: (config, id, cont) => handlePlaylistMore(config.refreshToken, id, cont),
+  },
 
-        if (route === "/catalog/library.json") {
-          const type = url.searchParams.get("type") ?? undefined;
-          const continuation = url.searchParams.get("continuation") ?? undefined;
-          return handleLibrary(rt, type, continuation);
-        }
+  related: {
+    handler: (config, id) => handleRelated(config.refreshToken, id),
+    forTrack: (config, id) => handleRelatedForTrack(config.refreshToken, id),
+  },
 
-        if (route === "/search.json") {
-          const q = url.searchParams.get("q");
-          if (!q) return errorResponse("Missing query parameter 'q'", 400);
-          const filter = url.searchParams.get("filter") ?? undefined;
-          return handleSearch(rt, q, filter);
-        }
+  queue: {
+    start: (config, id, context) => handleQueueStart(config.refreshToken, id, context),
+    more: (config, token) => handleQueueMore(config.refreshToken, token),
+    action: (config, body) => handleQueueAction(config.refreshToken, body),
+  },
 
-        if (route === "/search/suggestions.json") {
-          const q = url.searchParams.get("q");
-          if (!q) return json([]);
-          return handleSearchSuggestions(rt, q);
-        }
+  mutations: {
+    like: (config, body) => handleLike(config.refreshToken, body),
+    addToPlaylist: (config, body) => handleAddToPlaylist(config.refreshToken, body),
+  },
 
-        const streamMatch = route.match(/^\/stream\/([^/]+)\.json$/);
-        if (streamMatch?.[1]) {
-          return handleStream(rt, streamMatch[1]);
-        }
-
-        const albumMatch = route.match(/^\/album\/([^/]+)\.json$/);
-        if (albumMatch?.[1]) {
-          return handleAlbum(rt, albumMatch[1]);
-        }
-
-        const artistMatch = route.match(/^\/artist\/([^/]+)\.json$/);
-        if (artistMatch?.[1]) {
-          return handleArtist(rt, artistMatch[1]);
-        }
-
-        const playlistMoreMatch = route.match(/^\/playlist\/([^/]+)\/more\.json$/);
-        if (playlistMoreMatch?.[1]) {
-          const continuation = url.searchParams.get("continuation");
-          if (!continuation) return errorResponse("Missing continuation parameter", 400);
-          return handlePlaylistMore(rt, decodeURIComponent(playlistMoreMatch[1]), continuation);
-        }
-
-        const playlistMatch = route.match(/^\/playlist\/([^/]+)\.json$/);
-        if (playlistMatch?.[1]) {
-          return handlePlaylist(rt, playlistMatch[1]);
-        }
-
-        const relatedForTrackMatch = route.match(/^\/related-for-track\/([^/]+)\.json$/);
-        if (relatedForTrackMatch?.[1]) {
-          return handleRelatedForTrack(rt, decodeURIComponent(relatedForTrackMatch[1]));
-        }
-
-        const relatedMatch = route.match(/^\/related\/([^/]+)\.json$/);
-        if (relatedMatch?.[1]) {
-          return handleRelated(rt, decodeURIComponent(relatedMatch[1]));
-        }
-
-        const queueStartMatch = route.match(/^\/queue\/start\/([^/]+)\.json$/);
-        if (queueStartMatch?.[1]) {
-          const context = url.searchParams.get("context") ?? undefined;
-          return handleQueueStart(rt, queueStartMatch[1], context);
-        }
-
-        if (route === "/queue/more.json") {
-          const token = url.searchParams.get("token");
-          if (!token) return errorResponse("Missing token parameter", 400);
-          return handleQueueMore(rt, token);
-        }
-
-        if (route === "/lyrics.json") {
-          const videoId = url.searchParams.get("videoId") ?? undefined;
-          const title = url.searchParams.get("title") ?? undefined;
-          const artist = url.searchParams.get("artist") ?? undefined;
-          return handleLyrics(rt, videoId, title, artist);
-        }
-      }
-
-      // POST routes
-      if (req.method === "POST") {
-        if (route === "/queue/action") {
-          const body = (await req.json()) as any;
-          return handleQueueAction(rt, body);
-        }
-
-        if (route === "/like") {
-          const body = (await req.json()) as any;
-          return handleLike(rt, body);
-        }
-
-        if (route === "/playlist/add") {
-          const body = (await req.json()) as any;
-          return handleAddToPlaylist(rt, body);
-        }
-      }
-
-      return errorResponse("Not found", 404);
-    });
+  capabilities: {
+    supportsRadio: true,
+    supportsQueueActions: true,
+    supportsContinuation: true,
+    supportsSearchSuggestions: true,
+    supportsLikeStatus: true,
+    supportsAddToPlaylist: true,
+    supportsFilters: true,
+    supportsQuickAccess: true,
+    supportsRelated: true,
   },
 });
 
-console.log(`YTM addon server running on http://localhost:${PORT}`);
-console.log(`Configure at http://localhost:${PORT}/configure`);
+addon.listen(PORT);

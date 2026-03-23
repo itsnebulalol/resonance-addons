@@ -1,22 +1,6 @@
-export { corsHeaders, errorResponse, formatDuration, json } from "@resonance-addons/shared";
-
-import { parseConfig as decodeConfig } from "@resonance-addons/shared";
+export { corsHeaders, errorResponse, formatDuration, json } from "@resonance-addons/sdk";
 
 export const PROVIDER_ID = "com.resonance.torbox";
-
-export interface AddonConfig {
-  apiKey: string;
-  allowUncached?: boolean;
-}
-
-export function parseConfig(configStr: string): AddonConfig {
-  const config = decodeConfig<AddonConfig>(configStr);
-  if (!config.apiKey) throw new Error("Missing apiKey in config");
-  if (typeof config.allowUncached === "string") {
-    config.allowUncached = config.allowUncached === "true";
-  }
-  return config;
-}
 
 export function formatSize(bytes: number): string {
   if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;

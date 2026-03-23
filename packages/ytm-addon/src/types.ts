@@ -182,10 +182,3 @@ export interface LyricsData {
   syncType: "wordSynced" | "lineSynced" | "unsynced";
   lines: LyricsLine[];
 }
-
-export interface AddonConfig {
-  refreshToken: string;
-  cookies?: string;
-  region?: string;
-  language?: string;
-}

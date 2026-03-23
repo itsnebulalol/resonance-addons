@@ -1,179 +1,130 @@
-import { handleConfigure } from "./configure";
+import { createAddon } from "@resonance-addons/sdk";
+import { scrapeSecret } from "./auth";
+import { prewarmClientToken } from "./partner";
 import { handleAlbum } from "./routes/album";
 import { handleArtist } from "./routes/artist";
 import { handleHome } from "./routes/catalog";
 import { handleDJPlaylist } from "./routes/dj";
 import { handleLibrary } from "./routes/library";
 import { handleLyrics } from "./routes/lyrics";
-import { handleManifest } from "./routes/manifest";
 import { handleMetadata } from "./routes/metadata";
 import { handleAddToPlaylist, handleLikedSongs, handlePlaylist, handlePlaylistMore } from "./routes/playlist";
 import { handleRelated, handleRelatedForTrack } from "./routes/related";
 import { handleSearch, handleSearchSuggestions } from "./routes/search";
 import { handleTTS } from "./routes/tts";
-import { corsHeaders, errorResponse, json, parseConfig } from "./utils";
 
 const PORT = parseInt(process.env.PORT ?? "3002", 10);
 
-function getBaseURL(req: Request): string {
-  const host = req.headers.get("host") ?? `localhost:${PORT}`;
-  const proto = req.headers.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+interface SpotifyConfig {
+  spDc: string;
 }
 
-Bun.serve({
-  port: PORT,
-  idleTimeout: 120,
-  async fetch(req) {
-    const url = new URL(req.url);
-    const path = url.pathname;
+const addon = createAddon<SpotifyConfig>({
+  id: "com.resonance.spotify",
+  name: "Spotify",
+  description: "Lyrics, metadata, and DJ from your Spotify account",
+  version: "1.0.0",
+  icon: {
+    type: "remote",
+    value: "https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green.png",
+  },
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders() });
-    }
+  auth: {
+    label: "Enter your sp_dc cookie. See /configure for instructions.",
+    fields: [
+      {
+        key: "spDc",
+        type: "password",
+        title: "sp_dc Cookie",
+        placeholder: "Paste your sp_dc cookie value",
+        isRequired: true,
+      },
+    ],
+  },
 
-    if (path === "/" || path === "/configure") {
-      return handleConfigure(getBaseURL(req));
-    }
+  configurePage: `${import.meta.dir}/../templates/configure.html`,
 
-    if (path === "/health") {
-      return json({ status: "ok" });
-    }
+  parseConfig: (raw) => {
+    if (!raw.spDc) throw new Error("Missing spDc");
+    return { spDc: raw.spDc as string };
+  },
 
-    if (req.method === "GET" && path === "/manifest.json") {
-      return handleManifest(getBaseURL(req), null);
-    }
+  onStart: () => {
+    Promise.all([scrapeSecret(), prewarmClientToken()]).catch(() => {});
+  },
 
-    const match = path.match(/^\/([^/]+)(\/.*)?$/);
-    if (!match) {
-      return errorResponse("Not found", 404);
-    }
+  catalog: {
+    home: {
+      name: "Home",
+      isDefault: true,
+      handler: (config) => handleHome(config.spDc),
+    },
+    library: {
+      name: "Library",
+      handler: (config, params) => handleLibrary(config.spDc, params.type, params.continuation),
+    },
+  },
 
-    const configStr = match[1]!;
-    const route = match[2] ?? "/";
+  search: {
+    handler: (config, query, filter) => handleSearch(config.spDc, query, filter),
+    suggestions: (config, query) => handleSearchSuggestions(config.spDc, query),
+  },
 
-    let config;
-    try {
-      config = parseConfig(configStr);
-    } catch {
-      return errorResponse("Invalid config in URL — configure at /configure", 400);
-    }
+  lyrics: {
+    syncTypes: ["wordSynced", "lineSynced"],
+    handler: (config, params) => handleLyrics(config.spDc, params.title, params.artist, params.videoId),
+  },
 
-    const baseURL = getBaseURL(req);
-    const { spDc } = config;
+  metadata: {
+    handler: (config, params) => handleMetadata(config.spDc, params.title, params.artist),
+  },
 
-    if (route === "/manifest.json") {
-      return handleManifest(baseURL, configStr);
-    }
+  album: (config, id) => handleAlbum(config.spDc, id),
+  artist: (config, id) => handleArtist(config.spDc, id),
 
-    if (req.method === "GET") {
-      if (route === "/catalog/home.json") {
-        return handleHome(spDc);
-      }
+  playlist: {
+    handler: (config, id) => handlePlaylist(config.spDc, id),
+    more: (config, id, cont) => handlePlaylistMore(config.spDc, id, cont),
+    custom: {
+      "collection:tracks": (config) => handleLikedSongs(config.spDc),
+      dj: (config) => handleDJPlaylist(config.spDc),
+    },
+  },
 
-      if (route === "/catalog/library.json") {
-        const type = url.searchParams.get("type") ?? undefined;
-        const continuation = url.searchParams.get("continuation") ?? undefined;
-        return handleLibrary(spDc, type, continuation);
-      }
+  related: {
+    handler: (config, browseId) => handleRelated(config.spDc, browseId),
+    forTrack: (config, trackId) => handleRelatedForTrack(config.spDc, trackId),
+  },
 
-      if (route === "/search.json") {
-        const q = url.searchParams.get("q");
-        if (!q) return errorResponse("Missing query parameter 'q'", 400);
-        const filter = url.searchParams.get("filter") ?? undefined;
-        return handleSearch(spDc, q, filter);
-      }
+  mutations: {
+    addToPlaylist: (config, body) => handleAddToPlaylist(config.spDc, body),
+  },
 
-      if (route === "/search/suggestions.json") {
-        const q = url.searchParams.get("q");
-        if (!q) return json([]);
-        return handleSearchSuggestions(spDc, q);
-      }
+  tts: {
+    voices: [
+      { id: "1", name: "Voice 1" },
+      { id: "2", name: "Voice 2" },
+      { id: "3", name: "Voice 3" },
+      { id: "4", name: "Voice 4" },
+      { id: "5", name: "Voice 5" },
+      { id: "6", name: "Voice 6" },
+      { id: "7", name: "Voice 7" },
+      { id: "8", name: "Voice 8" },
+    ],
+    handler: (config, req) => handleTTS(config.spDc, req),
+  },
 
-      const albumMatch = route.match(/^\/album\/([^/]+)\.json$/);
-      if (albumMatch?.[1]) {
-        return handleAlbum(spDc, albumMatch[1]);
-      }
-
-      const artistMatch = route.match(/^\/artist\/([^/]+)\.json$/);
-      if (artistMatch?.[1]) {
-        return handleArtist(spDc, artistMatch[1]);
-      }
-
-      if (route === "/playlist/collection:tracks.json") {
-        return handleLikedSongs(spDc);
-      }
-
-      if (route === "/playlist/dj.json") {
-        return handleDJPlaylist(spDc);
-      }
-
-      const playlistMoreMatch = route.match(/^\/playlist\/([^/]+)\/more\.json$/);
-      if (playlistMoreMatch?.[1]) {
-        const cont = url.searchParams.get("continuation");
-        if (!cont) return errorResponse("Missing continuation parameter", 400);
-        return handlePlaylistMore(spDc, decodeURIComponent(playlistMoreMatch[1]), cont);
-      }
-
-      const playlistMatch = route.match(/^\/playlist\/([^/]+)\.json$/);
-      if (playlistMatch?.[1]) {
-        return handlePlaylist(spDc, playlistMatch[1]);
-      }
-
-      const relatedForTrackMatch = route.match(/^\/related-for-track\/([^/]+)\.json$/);
-      if (relatedForTrackMatch?.[1]) {
-        return handleRelatedForTrack(spDc, decodeURIComponent(relatedForTrackMatch[1]));
-      }
-
-      const relatedMatch = route.match(/^\/related\/([^/]+)\.json$/);
-      if (relatedMatch?.[1]) {
-        return handleRelated(spDc, decodeURIComponent(relatedMatch[1]));
-      }
-
-      if (route === "/metadata.json") {
-        const title = url.searchParams.get("title") ?? undefined;
-        const artist = url.searchParams.get("artist") ?? undefined;
-        return handleMetadata(spDc, title, artist);
-      }
-
-      if (route === "/lyrics.json") {
-        const title = url.searchParams.get("title") ?? undefined;
-        const artist = url.searchParams.get("artist") ?? undefined;
-        const videoId = url.searchParams.get("videoId") ?? undefined;
-        return handleLyrics(spDc, title, artist, videoId);
-      }
-    }
-
-    if (req.method === "GET" && route === "/tts/voices.json") {
-      return json([
-        { id: "1", name: "Voice 1" },
-        { id: "2", name: "Voice 2" },
-        { id: "3", name: "Voice 3" },
-        { id: "4", name: "Voice 4" },
-        { id: "5", name: "Voice 5" },
-        { id: "6", name: "Voice 6" },
-        { id: "7", name: "Voice 7" },
-        { id: "8", name: "Voice 8" },
-      ]);
-    }
-
-    if (req.method === "POST" && route === "/playlist/add") {
-      const body = (await req.json()) as any;
-      return handleAddToPlaylist(spDc, body);
-    }
-
-    if (req.method === "POST" && route === "/tts") {
-      return handleTTS(spDc, req);
-    }
-
-    return errorResponse("Not found", 404);
+  capabilities: {
+    supportsRadio: false,
+    supportsQueueActions: false,
+    supportsContinuation: true,
+    supportsSearchSuggestions: true,
+    supportsLikeStatus: false,
+    supportsAddToPlaylist: true,
+    supportsFilters: false,
+    supportsQuickAccess: false,
+    supportsRelated: false,
   },
 });
 
-console.log(`Spotify addon server running on http://localhost:${PORT}`);
-console.log(`Configure at http://localhost:${PORT}/configure`);
-
-import { scrapeSecret } from "./auth";
-import { prewarmClientToken } from "./partner";
-
-Promise.all([scrapeSecret(), prewarmClientToken()]).catch(() => {});
+addon.listen(PORT);
