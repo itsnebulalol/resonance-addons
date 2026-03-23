@@ -5,6 +5,7 @@ WORKDIR /app
 FROM base AS install
 COPY package.json bun.lock ./
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/sdk/package.json ./packages/sdk/
 COPY packages/am-addon/package.json ./packages/am-addon/
 COPY packages/spotify-addon/package.json ./packages/spotify-addon/
 COPY packages/torbox-addon/package.json ./packages/torbox-addon/
