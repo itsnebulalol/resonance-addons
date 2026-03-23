@@ -1,7 +1,32 @@
-import { ytFetch } from "../auth";
+import { mintAccessToken, ytFetch } from "../auth";
 import { resolveIFL } from "../ifl";
 import type { StreamResult } from "../types";
 import { errorResponse, json } from "../utils";
+
+const CPN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+
+function generateCpn(): string {
+  return Array.from({ length: 16 }, () => CPN_CHARS[(Math.random() * 64) | 0]).join("");
+}
+
+async function reportPlayback(trackingBaseUrl: string, refreshToken: string): Promise<void> {
+  const accessToken = await mintAccessToken(refreshToken);
+
+  const url = new URL(trackingBaseUrl);
+  url.searchParams.set("ver", "2");
+  url.searchParams.set("c", "IOS_MUSIC");
+  url.searchParams.set("cpn", generateCpn());
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (res.status === 204) {
+    console.log("[tracking] Play recorded");
+  } else {
+    console.warn(`[tracking] Unexpected status ${res.status}`);
+  }
+}
 
 export async function handleStream(refreshToken: string, videoId: string): Promise<Response> {
   try {
@@ -23,6 +48,13 @@ export async function handleStream(refreshToken: string, videoId: string): Promi
         `Playback not available: ${data?.playabilityStatus?.reason ?? data?.playabilityStatus?.status}`,
         404,
       );
+    }
+
+    const trackingUrl = data?.playbackTracking?.videostatsPlaybackUrl?.baseUrl;
+    if (trackingUrl) {
+      reportPlayback(trackingUrl, refreshToken).catch((e: any) => {
+        console.error("[tracking] Failed to report play:", e.message);
+      });
     }
 
     const formats = data?.streamingData?.adaptiveFormats ?? [];
