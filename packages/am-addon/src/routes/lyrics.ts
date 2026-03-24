@@ -1,3 +1,4 @@
+import { amFetch, isOnDeviceFetchSignal } from "../delegated-fetch";
 import { getDeveloperToken, getUserToken } from "../token";
 import { errorResponse, json } from "../utils";
 import { searchSong } from "./search";
@@ -43,6 +44,9 @@ export async function handleLyrics(title?: string, artist?: string, _videoId?: s
     const lyrics = await fetchLyrics(result.songId);
     return json(lyrics);
   } catch (e: any) {
+    if (isOnDeviceFetchSignal(e)) {
+      throw e;
+    }
     console.error("[lyrics] Error:", e.message);
     return errorResponse(e.message, 500);
   }
@@ -74,7 +78,7 @@ async function fetchTTML(songId: string, endpoint: string): Promise<LyricsData |
   }
   console.log(`[lyrics] ${endpoint}: songId=${songId} userToken=${userToken ? "yes" : "MISSING"}`);
 
-  const res = await fetch(url, { headers });
+  const res = await amFetch(url, { headers });
 
   if (!res.ok) {
     const body = await res.text();

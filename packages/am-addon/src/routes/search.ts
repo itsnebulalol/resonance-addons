@@ -1,3 +1,4 @@
+import { amFetch } from "../delegated-fetch";
 import { getDeveloperToken } from "../token";
 
 const API_BASE = "https://amp-api.music.apple.com";
@@ -13,7 +14,7 @@ export async function searchSong(title: string, artist: string): Promise<SearchR
   const term = `${title} ${artist}`;
   const url = `${API_BASE}/v1/catalog/${STOREFRONT}/search?term=${encodeURIComponent(term)}&types=songs&limit=5`;
 
-  const res = await fetch(url, {
+  const res = await amFetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       Origin: "https://music.apple.com",

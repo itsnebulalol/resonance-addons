@@ -1,3 +1,4 @@
+import { amFetch, isOnDeviceFetchSignal } from "../delegated-fetch";
 import { getDeveloperToken } from "../token";
 import { errorResponse, json } from "../utils";
 import { searchSong } from "./search";
@@ -33,6 +34,9 @@ export async function handleMetadata(title?: string, artist?: string): Promise<R
     const metadata = await fetchMetadata(result.songId, result.durationSeconds);
     return json(metadata);
   } catch (e: any) {
+    if (isOnDeviceFetchSignal(e)) {
+      throw e;
+    }
     console.error("[metadata] Error:", e.message);
     return errorResponse(e.message, 500);
   }
@@ -42,7 +46,7 @@ async function fetchMetadata(songId: string, durationSeconds: number | null): Pr
   const token = await getDeveloperToken();
 
   const songUrl = `${API_BASE}/v1/catalog/${STOREFRONT}/songs/${songId}?include=albums`;
-  const songRes = await fetch(songUrl, {
+  const songRes = await amFetch(songUrl, {
     headers: {
       Authorization: `Bearer ${token}`,
       Origin: "https://music.apple.com",
@@ -90,7 +94,7 @@ async function fetchMetadata(songId: string, durationSeconds: number | null): Pr
 
 async function fetchAnimatedArtwork(albumId: string, token: string): Promise<string | null> {
   const url = `${API_BASE}/v1/catalog/${STOREFRONT}/albums/${albumId}?extend=editorialVideo`;
-  const res = await fetch(url, {
+  const res = await amFetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       Origin: "https://music.apple.com",

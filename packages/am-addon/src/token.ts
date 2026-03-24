@@ -1,3 +1,5 @@
+import { amFetch, isOnDeviceFetchSignal } from "./delegated-fetch";
+
 let cachedDevToken: string | null = null;
 let devTokenExpiresAt = 0;
 let configuredUserToken: string | null = null;
@@ -20,7 +22,7 @@ export async function getDeveloperToken(): Promise<string> {
 
   console.log("[token] Scraping developer token...");
 
-  const html = await fetch(BASE, {
+  const html = await amFetch(BASE, {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
@@ -42,7 +44,7 @@ export async function getDeveloperToken(): Promise<string> {
 
   for (const url of scriptUrls) {
     try {
-      const js = await fetch(url, {
+      const js = await amFetch(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
           Referer: "https://music.apple.com/",
@@ -61,7 +63,11 @@ export async function getDeveloperToken(): Promise<string> {
           return token;
         }
       }
-    } catch {}
+    } catch (error) {
+      if (isOnDeviceFetchSignal(error)) {
+        throw error;
+      }
+    }
   }
 
   throw new Error("Failed to scrape developer token");

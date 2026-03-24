@@ -30,6 +30,7 @@ const addon = createAddon<AMConfig>({
   },
 
   configurePage: `${import.meta.dir}/../templates/configure.html`,
+  onDeviceFetchHosts: ["music.apple.com", "*.music.apple.com"],
 
   parseConfig: (raw) => {
     if (!raw.userToken) throw new Error("Missing userToken");
