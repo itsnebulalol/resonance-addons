@@ -1,0 +1,13 @@
+{
+  "name": "@resonance-addons/spotify-addon",
+  "module": "src/index.ts",
+  "scripts": {
+    "build": "bun ../../scripts/build.ts --addon=spotify-addon"
+  },
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@resonance-addons/sdk": "*",
+    "cuimp": "^1.10.0"
+  }
+}

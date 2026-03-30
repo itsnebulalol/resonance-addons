@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resonance Addons</title>
+    <meta name="description" content="A collection of addons for Resonance.">
+    <meta name="theme-color" content="#050505">
+    <meta property="og:title" content="Resonance Addons">
+    <meta property="og:description" content="A collection of addons for Resonance.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://github.com/itsnebulalol/resonance-addons">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&family=Syne:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050505;
+            --surface: #0f0f0f;
+            --surface-hover: #141414;
+            --border: #1f1f1f;
+            --text: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --font-display: 'Syne', sans-serif;
+            --font-body: 'Outfit', sans-serif;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .noise {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; z-index: 50; opacity: 0.03;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+        
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
+        
+        header { padding: 2rem 0; }
+        h1 { font-family: var(--font-body); font-size: 2rem; font-weight: 500; margin-bottom: 0.25rem; }
+        .hero-desc { font-size: 0.875rem; color: var(--text-muted); font-weight: 300; }
+
+        .addons {
+            display: flex; flex-direction: column; gap: 1rem;
+            padding-bottom: 6rem;
+        }
+        .addon-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            display: flex; flex-direction: column; gap: 1.5rem;
+            position: relative; overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            text-decoration: none; color: inherit;
+            opacity: 0; transform: translateY(20px);
+        }
+        .addon-card.visible {
+            animation: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .addon-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--accent), transparent 40%);
+            opacity: 0; transition: opacity 0.4s; z-index: 0; pointer-events: none;
+        }
+        .addon-card:hover::before { opacity: 0.08; }
+        .addon-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5); }
+        
+        .card-content { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; }
+        @media (min-width: 768px) {
+            .card-content { flex-direction: row; align-items: center; justify-content: space-between; gap: 2rem; }
+        }
+        
+        .card-info { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
+        .card-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .card-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
+        .version { 
+            font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 100px; 
+            background: rgba(255,255,255,0.05); color: var(--text-muted); font-family: monospace;
+        }
+        .card-desc { color: var(--text-muted); font-size: 1rem; font-weight: 300; }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 0.75rem 1.5rem; border-radius: 100px;
+            font-family: var(--font-body); font-size: 0.875rem; font-weight: 500;
+            cursor: pointer; transition: all 0.2s; text-decoration: none;
+            background: transparent; border: 1px solid var(--border); color: var(--text);
+            white-space: nowrap;
+        }
+        .btn:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
+        .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+        .btn-primary:hover { background: transparent; color: var(--text); }
+
+        .card-actions { display: flex; gap: 0.75rem; }
+        @media (max-width: 767px) {
+            .card-actions { flex-direction: column; }
+            .card-actions .btn { width: 100%; }
+        }
+        
+        footer {
+            padding: 3rem 0; border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.875rem; color: var(--text-muted); flex-wrap: wrap; gap: 1rem;
+        }
+        footer a { color: var(--text); text-decoration: none; transition: color 0.2s; }
+        footer a:hover { color: var(--accent, #fff); }
+
+        .toast {
+            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px);
+            background: var(--text); color: var(--bg); padding: 0.75rem 1.5rem;
+            border-radius: 100px; font-weight: 500; font-size: 0.875rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="noise"></div>
+    <div class="container">
+        <header>
+            <h1>Resonance Addons</h1>
+            <p class="hero-desc">A collection of addons for Resonance.</p>
+        </header>
+
+        <main class="addons">
+            <!-- YouTube Music -->
+            <div class="addon-card" style="--accent: #ff0000;">
+                <div class="card-content">
+                    <div class="card-info">
+                        <div class="card-header">
+                            <h2 class="card-title">YouTube Music</h2>
+                            <!-- <span class="version">v1.0.0</span> -->
+                        </div>
+                        <p class="card-desc">Stream and browse your YouTube Music library</p>
+                    </div>
+                    <div class="card-actions">
+                        <button type="button" class="btn copy-btn" data-url="/ytm.js">Copy URL</button>
+                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Fytm.js" class="btn btn-primary">Install</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spotify -->
+            <div class="addon-card" style="--accent: #1db954;">
+                <div class="card-content">
+                    <div class="card-info">
+                        <div class="card-header">
+                            <h2 class="card-title">Spotify</h2>
+                            <!-- <span class="version">v2.0.1</span> -->
+                        </div>
+                        <p class="card-desc">Browse, search, and manage your Spotify library</p>
+                    </div>
+                    <div class="card-actions">
+                        <button type="button" class="btn copy-btn" data-url="/spotify.js">Copy URL</button>
+                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Fspotify.js" class="btn btn-primary">Install</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Apple Music Enhancements -->
+            <div class="addon-card" style="--accent: #fa243c;">
+                <div class="card-content">
+                    <div class="card-info">
+                        <div class="card-header">
+                            <h2 class="card-title">Apple Music Enhancements</h2>
+                            <!-- <span class="version">v1.0.0</span> -->
+                        </div>
+                        <p class="card-desc">Lyrics, metadata, and artwork from Apple Music</p>
+                    </div>
+                    <div class="card-actions">
+                        <button type="button" class="btn copy-btn" data-url="/am.js">Copy URL</button>
+                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Fam.js" class="btn btn-primary">Install</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TorBox -->
+            <div class="addon-card" style="--accent: #8b5cf6;">
+                <div class="card-content">
+                    <div class="card-info">
+                        <div class="card-header">
+                            <h2 class="card-title">TorBox</h2>
+                            <!-- <span class="version">v1.0.0</span> -->
+                        </div>
+                        <p class="card-desc">Stream music from cached torrents via TorBox</p>
+                    </div>
+                    <div class="card-actions">
+                        <button type="button" class="btn copy-btn" data-url="/torbox.js">Copy URL</button>
+                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Ftorbox.js" class="btn btn-primary">Install</a>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <div><a href="https://github.com/sponsors/itsnebulalol" target="_blank" rel="noopener noreferrer">Sponsor this project ↗</a></div>
+            <a href="https://github.com/itsnebulalol/resonance-addons" target="_blank" rel="noopener noreferrer">GitHub Repository ↗</a>
+        </footer>
+    </div>
+
+    <div class="toast" id="toast">URL copied to clipboard</div>
+
+    <script>
+        document.querySelectorAll('.addon-card').forEach(card => {
+            card.addEventListener('mousemove', e => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry, index) => {
+                if (entry.isIntersecting) {
+                    setTimeout(() => {
+                        entry.target.classList.add('visible');
+                    }, index * 100);
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.addon-card').forEach(card => {
+            observer.observe(card);
+        });
+
+        const toast = document.getElementById('toast');
+        let toastTimeout;
+
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const path = e.target.getAttribute('data-url');
+                const baseUrl = window.location.protocol === 'file:' ? 'https://resonance.itsnebula.net' : window.location.origin;
+                const fullUrl = baseUrl + path;
+                
+                try {
+                    await navigator.clipboard.writeText(fullUrl);
+                    showToast('URL copied to clipboard');
+                } catch {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = fullUrl;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        showToast('URL copied to clipboard');
+                    } catch {
+                        showToast('Failed to copy URL');
+                    }
+                    document.body.removeChild(textArea);
+                }
+            });
+        });
+
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>

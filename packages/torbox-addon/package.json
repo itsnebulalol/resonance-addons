@@ -1,0 +1,12 @@
+{
+  "name": "@resonance-addons/torbox-addon",
+  "module": "src/index.ts",
+  "scripts": {
+    "build": "bun ../../scripts/build.ts --addon=torbox-addon"
+  },
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@resonance-addons/sdk": "*"
+  }
+}
