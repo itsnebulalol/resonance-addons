@@ -32,7 +32,10 @@ export async function handleStream(refreshToken: string, videoId: string): Promi
       throw new AddonError("No audio stream found", 404);
     }
 
-    const best = audioFormats.sort((a: any, b: any) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0];
+    const avPlayerFormats = audioFormats.filter((f: any) => f.mimeType?.startsWith("audio/mp4"));
+    const best = (avPlayerFormats.length > 0 ? avPlayerFormats : audioFormats).sort(
+      (a: any, b: any) => (b.bitrate ?? 0) - (a.bitrate ?? 0),
+    )[0];
 
     if (!best.url) {
       throw new AddonError("Audio stream URL not available (cipher-protected)", 404);
@@ -61,7 +64,7 @@ export async function handleStream(refreshToken: string, videoId: string): Promi
       url: best.url,
       bitrate: best.bitrate ?? null,
       durationSeconds: best.approxDurationMs ? Math.round(parseInt(best.approxDurationMs, 10) / 1000) : null,
-      format: best.mimeType ?? null,
+      format: best.mimeType?.split(";")[0] ?? null,
       trackingURL,
       trackingHeaders,
     };

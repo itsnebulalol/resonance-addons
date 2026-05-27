@@ -1,7 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
 import type { SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem, Track } from "../types";
-import { PROVIDER_ID } from "../utils";
+import { bestThumbnail, PROVIDER_ID } from "../utils";
 
 const filterParams: Record<string, string> = {
   songs: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
@@ -26,6 +26,15 @@ export async function handleSearch(refreshToken: string, query: string, filter?:
       const sections = tab.tabRenderer?.content?.sectionListRenderer?.contents ?? [];
 
       for (const section of sections) {
+        const classicShelfItems = section?.musicShelfRenderer?.contents;
+        if (Array.isArray(classicShelfItems)) {
+          for (const item of classicShelfItems) {
+            const renderer = item.musicTwoColumnItemRenderer ?? item.musicResponsiveListItemRenderer;
+            const parsed = renderer ? parseClassicSearchItem(renderer) : null;
+            if (parsed) items.push(parsed);
+          }
+        }
+
         const isrContents = section?.itemSectionRenderer?.contents ?? [];
         for (const content of isrContents) {
           const model = content?.elementRenderer?.newElement?.type?.componentType?.model;
@@ -64,6 +73,17 @@ export async function handleSearchSuggestions(refreshToken: string, query: strin
 
     const contents = data?.contents ?? [];
     for (const section of contents) {
+      const shelfContents = section?.sectionListRenderer?.contents ?? [];
+      for (const shelf of shelfContents) {
+        const items = shelf?.musicShelfRenderer?.contents ?? [];
+        for (const item of items) {
+          const suggestion = item?.searchSuggestionRenderer?.suggestion;
+          if (suggestion?.runs) {
+            texts.push(suggestion.runs.map((r: any) => r.text).join(""));
+          }
+        }
+      }
+
       const sectionContents = section?.searchSuggestionsSectionRenderer?.contents ?? [];
       for (const item of sectionContents) {
         const suggestion = item?.searchSuggestionRenderer?.suggestion;
@@ -78,6 +98,74 @@ export async function handleSearchSuggestions(refreshToken: string, query: strin
     console.error("Search suggestions error:", e.message);
     return [];
   }
+}
+
+function parseClassicSearchItem(item: any): SearchResultItem | null {
+  const title = item.title?.runs?.map((r: any) => r.text).join("") ?? "";
+  const subtitleRuns = item.subtitle?.runs ?? [];
+  const subtitle = subtitleRuns.map((r: any) => r.text ?? "").join("");
+  const thumbnailURL = bestThumbnail(item.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? []);
+
+  const watchEndpoint = item.navigationEndpoint?.watchEndpoint;
+  const browseEndpoint = item.navigationEndpoint?.browseEndpoint;
+  const browseId = browseEndpoint?.browseId;
+  const pageType = browseEndpoint?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType;
+
+  if (watchEndpoint?.videoId) {
+    const duration = subtitleRuns
+      .map((r: any) => r.text ?? "")
+      .find((text: string) => /^\d+:\d{2}(:\d{2})?$/.test(text));
+    const track: Track = {
+      id: watchEndpoint.videoId,
+      provider: PROVIDER_ID,
+      title,
+      artists: parseArtistsFromSubtitle(subtitle),
+      album: null,
+      duration: duration ?? null,
+      durationSeconds: duration ? parseDurationSeconds(duration) : null,
+      thumbnailURL,
+      isExplicit: false,
+    };
+    return { type: "track", track };
+  }
+
+  if (pageType === "MUSIC_PAGE_TYPE_ALBUM") {
+    const album: SearchAlbum = {
+      id: browseId ?? "",
+      provider: PROVIDER_ID,
+      title,
+      artists: parseArtistsFromSubtitle(subtitle),
+      year: subtitle.match(/\b(19|20)\d{2}\b/)?.[0] ?? null,
+      thumbnailURL,
+      isExplicit: false,
+    };
+    return { type: "album", album };
+  }
+
+  if (pageType === "MUSIC_PAGE_TYPE_ARTIST") {
+    const artist: SearchArtist = {
+      id: browseId ?? "",
+      provider: PROVIDER_ID,
+      name: title,
+      thumbnailURL,
+      subscriberCount: subtitle || null,
+    };
+    return { type: "artist", artist };
+  }
+
+  if (pageType === "MUSIC_PAGE_TYPE_PLAYLIST" || browseId?.startsWith("VL")) {
+    const playlist: SearchPlaylist = {
+      id: browseId ?? "",
+      provider: PROVIDER_ID,
+      title,
+      author: parseArtistsFromSubtitle(subtitle)[0]?.name ?? null,
+      trackCount: null,
+      thumbnailURL,
+    };
+    return { type: "playlist", playlist };
+  }
+
+  return null;
 }
 
 function parseIOSSearchItem(item: any): SearchResultItem | null {
@@ -159,6 +247,14 @@ function parseIOSSearchItem(item: any): SearchResultItem | null {
     return { type: "playlist", playlist };
   }
 
+  return null;
+}
+
+function parseDurationSeconds(duration: string): number | null {
+  const parts = duration.split(":").map(Number);
+  if (parts.some((part) => Number.isNaN(part))) return null;
+  if (parts.length === 2) return (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
+  if (parts.length === 3) return (parts[0] ?? 0) * 3600 + (parts[1] ?? 0) * 60 + (parts[2] ?? 0);
   return null;
 }
 

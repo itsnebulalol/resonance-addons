@@ -1,7 +1,10 @@
 const CLIENT_ID = "755973059757-iigsfdoqt2c4qm209soqp2dlrh33almr.apps.googleusercontent.com";
 const TOKEN_URL = "https://oauthaccountmanager.googleapis.com/v1/issuetoken";
 const INNERTUBE_BASE = "https://music.youtube.com/youtubei/v1";
-const MOBILE_UA = "com.google.ios.youtubemusic/6.49 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)";
+const IOS_MUSIC_VERSION = "9.06.4";
+const IOS_OS_VERSION = "26.2.1";
+const IOS_DEVICE_MODEL = "iPhone18,4";
+const MOBILE_UA = `com.google.ios.youtubemusic/${IOS_MUSIC_VERSION} iSL/3.4 iPhone/${IOS_OS_VERSION} hw/iPhone18_4 (gzip)`;
 
 interface RegionContext {
   gl: string;
@@ -78,6 +81,14 @@ function setCachedResponse(key: string, data: unknown): void {
   pruneResponseCache();
 }
 
+export function invalidateResponseCache(refreshToken: string): void {
+  for (const key of responseCache.keys()) {
+    if (key.startsWith(`${refreshToken}::`)) {
+      responseCache.delete(key);
+    }
+  }
+}
+
 function getDeviceId(refreshToken: string): string {
   let id = deviceIds.get(refreshToken);
   if (!id) {
@@ -140,14 +151,14 @@ function getIOSContext() {
   return {
     client: {
       clientName: "IOS_MUSIC",
-      clientVersion: "6.49",
+      clientVersion: IOS_MUSIC_VERSION,
       hl: region.hl,
       gl: region.gl,
       platform: "MOBILE",
       osName: "iOS",
-      osVersion: "18.3.2",
+      osVersion: IOS_OS_VERSION,
       deviceMake: "Apple",
-      deviceModel: "iPhone16,2",
+      deviceModel: IOS_DEVICE_MODEL,
     },
     user: { lockedSafetyMode: false },
   };

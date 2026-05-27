@@ -5,12 +5,12 @@ import type { QueueAction, QueueContinuation, QueuePage, Track } from "../types"
 import { bestThumbnail, PROVIDER_ID } from "../utils";
 import { lookupAlbumId } from "./search";
 
-export async function handleQueueStart(refreshToken: string, videoId: string, contextB64?: string): Promise<QueuePage> {
+export async function handleQueueStart(refreshToken: string, videoId: string, context?: any): Promise<QueuePage> {
   try {
     let playlistId: string | undefined;
-    if (contextB64) {
+    if (context) {
       try {
-        const ctx = JSON.parse(Buffer.from(contextB64, "base64").toString());
+        const ctx = typeof context === "string" ? JSON.parse(Buffer.from(context, "base64").toString()) : context;
         let id: string | undefined = ctx.id;
         if (id?.startsWith("VL")) id = id.slice(2);
         if (id && !id.startsWith("MPRE")) {

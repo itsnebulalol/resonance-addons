@@ -21,17 +21,23 @@ export async function handleArtist(refreshToken: string, browseId: string): Prom
 
     const immersiveHeader = data?.header?.musicImmersiveHeaderRenderer;
     const visualHeader = data?.header?.musicVisualHeaderRenderer;
+    const elementHeader =
+      data?.header?.musicElementHeaderRenderer?.elementRenderer?.elementRenderer?.newElement?.type?.componentType?.model
+        ?.youtubeModel?.musicPageHeaderModel;
     const header = immersiveHeader ?? visualHeader;
 
-    const name = header?.title?.runs?.[0]?.text ?? "";
+    const name = header?.title?.runs?.[0]?.text ?? elementHeader?.title ?? "";
     const thumbSources =
       header?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ??
       header?.foregroundThumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ??
+      elementHeader?.backgroundImageData?.image?.sources ??
       [];
     const thumbnailURL = bestThumbnail(thumbSources);
 
     const subscriberText =
-      header?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text ?? null;
+      header?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.runs?.[0]?.text ??
+      elementHeader?.monthlyListenerCount?.content ??
+      null;
 
     const sections =
       data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer

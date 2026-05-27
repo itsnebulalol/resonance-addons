@@ -26,6 +26,10 @@ export async function handleHome(refreshToken: string, continuation?: string): P
       const sectionList =
         data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer;
       const contents = sectionList?.contents ?? [];
+      const messageText = extractMessageText(contents);
+      if (messageText) {
+        throw new AddonError(messageText, 426);
+      }
 
       for (const section of contents) {
         const sectionContents = section?.itemSectionRenderer?.contents;
@@ -185,6 +189,23 @@ function parseSections(contents: any[]): HomeSection[] {
     }
   }
   return sections;
+}
+
+function extractMessageText(contents: any[]): string | null {
+  for (const section of contents) {
+    const sectionContents = section?.itemSectionRenderer?.contents;
+    if (!Array.isArray(sectionContents)) continue;
+    for (const content of sectionContents) {
+      const runs = content?.messageRenderer?.text?.runs;
+      if (!Array.isArray(runs)) continue;
+      const text = runs
+        .map((run) => run?.text ?? "")
+        .join("")
+        .trim();
+      if (text) return text;
+    }
+  }
+  return null;
 }
 
 function parseCarouselSection(carousel: any): HomeSection | null {

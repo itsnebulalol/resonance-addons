@@ -4,7 +4,7 @@ import { handleArtist } from "./routes/artist";
 import { handleHome } from "./routes/catalog";
 import { handleLibrary } from "./routes/library";
 import { handleLyrics } from "./routes/lyrics";
-import { handleAddToPlaylist, handleLike } from "./routes/mutations";
+import { handleAddToPlaylist, handleGetLikeStatus, handleLike } from "./routes/mutations";
 import { handlePlaylist, handlePlaylistMore } from "./routes/playlist";
 import { handleQueueAction, handleQueueMore, handleQueueStart } from "./routes/queue";
 import { handleRelated, handleRelatedForTrack } from "./routes/related";
@@ -69,9 +69,10 @@ export const addon = defineAddon<YTMConfig>({
     getRelatedForTrack: (config, trackId) => handleRelatedForTrack(config.refreshToken, trackId),
     startQueue: (config, trackId, context) => handleQueueStart(config.refreshToken, trackId, context),
     loadMore: (config, token) => handleQueueMore(config.refreshToken, token),
-    executeAction: (config, action) => handleQueueAction(config.refreshToken, action),
+    executeAction: (config, action, currentTrack) => handleQueueAction(config.refreshToken, { action, currentTrack }),
     setLikeStatus: (config, status, videoId) =>
       handleLike(config.refreshToken, { status: status as "liked" | "disliked" | "none", videoId }).then(() => {}),
+    getLikeStatus: (config, videoId) => handleGetLikeStatus(config.refreshToken, videoId),
     addToPlaylist: (config, trackId, playlistId) =>
       handleAddToPlaylist(config.refreshToken, { videoId: trackId, playlistId }).then(() => {}),
   },
