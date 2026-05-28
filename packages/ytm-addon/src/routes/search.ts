@@ -5,6 +5,7 @@ import { bestThumbnail, PROVIDER_ID } from "../utils";
 
 const filterParams: Record<string, string> = {
   songs: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
+  videos: "EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D",
   albums: "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D",
   artists: "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D",
   playlists: "EgWKAQIoAWoKEAkQChAFEAMQBA%3D%3D",
@@ -53,6 +54,11 @@ export async function handleSearch(refreshToken: string, query: string, filter?:
               const parsed = parseIOSSearchItem(item);
               if (parsed) items.push(parsed);
             }
+          }
+
+          if (model?.musicListItemWrapperModel) {
+            const parsed = parseIOSSearchItem(model);
+            if (parsed) items.push(parsed);
           }
         }
       }
@@ -169,13 +175,14 @@ function parseClassicSearchItem(item: any): SearchResultItem | null {
 }
 
 function parseIOSSearchItem(item: any): SearchResultItem | null {
-  const title = item.title ?? "";
-  const subtitle = String(item.subtitle ?? "");
-  const thumbnailSources = item.thumbnail?.image?.sources ?? [];
+  const data = item.musicListItemWrapperModel?.musicListItemData ?? item;
+  const title = data.title ?? "";
+  const subtitle = String(data.subtitle ?? "");
+  const thumbnailSources = data.thumbnail?.image?.sources ?? [];
   const thumbnailURL =
     thumbnailSources.length > 0 ? (thumbnailSources[thumbnailSources.length - 1]?.url ?? null) : null;
 
-  const cmd = item.onTap?.innertubeCommand;
+  const cmd = data.onTap?.innertubeCommand;
   const browseId = cmd?.browseEndpoint?.browseId;
   const videoId = cmd?.watchEndpoint?.videoId;
   const pageType =
@@ -183,7 +190,7 @@ function parseIOSSearchItem(item: any): SearchResultItem | null {
 
   if (videoId) {
     let album: Track["album"] = null;
-    const menuItems = item.menuCommand?.innertubeCommand?.menuEndpoint?.menu?.menuRenderer?.items ?? [];
+    const menuItems = data.menuCommand?.innertubeCommand?.menuEndpoint?.menu?.menuRenderer?.items ?? [];
     for (const mi of menuItems) {
       const nav = mi.menuNavigationItemRenderer;
       if (!nav) continue;

@@ -327,7 +327,7 @@ function parseSpeedDialItems(items: any[]): QuickAccessItem[] {
   const result: QuickAccessItem[] = [];
 
   for (const item of items) {
-    if (item.isShortcut && item.onTapAnimation?.url?.includes("IFL")) {
+    if (item.isShortcut) {
       result.push({
         id: crypto.randomUUID(),
         title: "I'm Feeling Lucky",
@@ -356,6 +356,12 @@ function parseSpeedDialItems(items: any[]): QuickAccessItem[] {
 
     let videoId: string | undefined;
     let playlistId: string | undefined;
+    const directWatchEndpoint = item.startPlaybackCommand?.innertubeCommand?.watchEndpoint;
+    if (directWatchEndpoint) {
+      videoId = directWatchEndpoint.videoId;
+      playlistId = directWatchEndpoint.playlistId;
+    }
+
     const commands = item.startPlaybackCommand?.serialCommand?.commands;
     if (Array.isArray(commands)) {
       for (const cmd of commands) {
