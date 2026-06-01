@@ -19,7 +19,7 @@ export const addon = defineAddon<AMConfig>({
   id: PROVIDER_ID,
   name: "Apple Music",
   description: "Stream and browse Apple Music — home, library, search, playback, lyrics & metadata",
-  version: "1.2.1",
+  version: "1.0.1",
   icon: { type: "bundled", value: "applemusic" },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },
