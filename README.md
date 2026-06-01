@@ -10,7 +10,7 @@ All addons are available on the [Resonance Addons homepage](https://resonance.it
 |-------|-------------|
 | **YouTube Music** | Stream and browse your YouTube Music library |
 | **Spotify** | Browse, search, and manage your Spotify library |
-| **Apple Music Enhancements** | Lyrics, metadata, and artwork from Apple Music |
+| **Apple Music** | Stream and browse Apple Music — home, library, search, playback, lyrics & metadata |
 | **TorBox** | Stream music from cached torrents via TorBox |
 
 ## Development
@@ -49,7 +49,7 @@ packages/
   sdk/             Shared addon SDK (defineAddon, types, errors)
   ytm-addon/       YouTube Music addon
   spotify-addon/   Spotify addon
-  am-addon/        Apple Music Enhancements addon
+  am-addon/        Apple Music addon
   torbox-addon/    TorBox addon
 public/
   index.html       Static homepage
