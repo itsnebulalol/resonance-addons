@@ -31,5 +31,8 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "node-forge": "^1.4.0"
   }
 }

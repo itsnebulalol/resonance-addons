@@ -30,6 +30,7 @@ for (const addon of addons) {
     target: "browser",
     minify: true,
     plugins: [workspaceResolver],
+    banner: "var self = typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : this);",
     define: {
       "process.env.NODE_ENV": '"production"',
     },

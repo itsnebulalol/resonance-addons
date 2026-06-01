@@ -60,8 +60,19 @@ export interface Capabilities {
   supportsRelated?: boolean;
 }
 
+export interface StreamResult {
+  url: string;
+  bitrate?: number | null;
+  durationSeconds?: number | null;
+  format?: string | null;
+  keyId?: string;
+  key?: string;
+  trackingURL?: string;
+  trackingHeaders?: Record<string, string>;
+}
+
 export interface AddonHandlers<TConfig> {
-  resolveStream?: (config: TConfig, trackId: string) => Promise<any>;
+  resolveStream?: (config: TConfig, trackId: string) => Promise<StreamResult>;
   getCatalog?: (config: TConfig, id: string, extra?: any) => Promise<any>;
   applyFilter?: (config: TConfig, filterPayload: any) => Promise<any>;
   getQuickAccess?: (config: TConfig) => Promise<any[] | null>;
