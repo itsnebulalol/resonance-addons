@@ -8,8 +8,9 @@ export function bestThumbnail(thumbnails: { url: string; width: number; height: 
 }
 
 function upscaleThumbnail(url: string): string {
-  if (url.includes("lh3.googleusercontent.com") && /=w\d+-h\d+/.test(url)) {
-    return url.replace(/=w\d+-h\d+/, "=w544-h544");
+  if (/googleusercontent\.com|ggpht\.com/.test(url)) {
+    if (/=w\d+-h\d+/.test(url)) return url.replace(/=w\d+-h\d+/, "=w1200-h1200");
+    if (/=s\d+/.test(url)) return url.replace(/=s\d+/, "=s1200");
   }
   return url;
 }

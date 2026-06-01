@@ -1,7 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
 import type { Track } from "../types";
-import { PROVIDER_ID } from "../utils";
+import { bestThumbnail, PROVIDER_ID } from "../utils";
 
 export async function handleRelated(refreshToken: string, browseId: string): Promise<Track[]> {
   try {
@@ -92,8 +92,7 @@ function parseIOSRelatedItem(item: any): Track | null {
   const subtitle = item.subtitle ?? "";
   const artists = subtitle ? [{ id: null as string | null, name: subtitle.split(" • ")[0]?.trim() ?? subtitle }] : [];
   const thumbnailSources = item.thumbnail?.image?.sources ?? [];
-  const thumbnailURL =
-    thumbnailSources.length > 0 ? (thumbnailSources[thumbnailSources.length - 1]?.url ?? null) : null;
+  const thumbnailURL = bestThumbnail(thumbnailSources);
 
   return {
     id: videoId,

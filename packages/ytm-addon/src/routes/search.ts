@@ -179,8 +179,7 @@ function parseIOSSearchItem(item: any): SearchResultItem | null {
   const title = data.title ?? "";
   const subtitle = String(data.subtitle ?? "");
   const thumbnailSources = data.thumbnail?.image?.sources ?? [];
-  const thumbnailURL =
-    thumbnailSources.length > 0 ? (thumbnailSources[thumbnailSources.length - 1]?.url ?? null) : null;
+  const thumbnailURL = bestThumbnail(thumbnailSources);
 
   const cmd = data.onTap?.innertubeCommand;
   const browseId = cmd?.browseEndpoint?.browseId;
