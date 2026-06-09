@@ -23,14 +23,30 @@
         "node-forge": "^1.3.1",
       },
     },
+    "packages/lrclib-addon": {
+      "name": "@resonance-addons/lrclib-addon",
+      "dependencies": {
+        "@resonance-addons/sdk": "*",
+      },
+    },
     "packages/sdk": {
       "name": "@resonance-addons/sdk",
+    },
+    "packages/soundcloud-addon": {
+      "name": "@resonance-addons/soundcloud-addon",
+      "dependencies": {
+        "@resonance-addons/sdk": "*",
+      },
     },
     "packages/spotify-addon": {
       "name": "@resonance-addons/spotify-addon",
       "dependencies": {
         "@resonance-addons/sdk": "*",
         "cuimp": "^1.10.0",
+        "node-forge": "^1.4.0",
+      },
+      "devDependencies": {
+        "@types/node-forge": "^1.3.11",
       },
     },
     "packages/torbox-addon": {
@@ -69,7 +85,11 @@
 
     "@resonance-addons/am-addon": ["@resonance-addons/am-addon@workspace:packages/am-addon"],
 
+    "@resonance-addons/lrclib-addon": ["@resonance-addons/lrclib-addon@workspace:packages/lrclib-addon"],
+
     "@resonance-addons/sdk": ["@resonance-addons/sdk@workspace:packages/sdk"],
+
+    "@resonance-addons/soundcloud-addon": ["@resonance-addons/soundcloud-addon@workspace:packages/soundcloud-addon"],
 
     "@resonance-addons/spotify-addon": ["@resonance-addons/spotify-addon@workspace:packages/spotify-addon"],
 
@@ -80,6 +100,8 @@
     "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 
     "@types/node": ["@types/node@25.9.1", "", { "dependencies": { "undici-types": ">=7.24.0 <7.24.7" } }, "sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg=="],
+
+    "@types/node-forge": ["@types/node-forge@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-mhVF2BnD4BO+jtOp7z1CdzaK4mbuK0LLQYAvdOLqHTavxFNq4zA1EmYkpnFjP8HOUzedfQkRnp0E2ulSAYSzAw=="],
 
     "bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 

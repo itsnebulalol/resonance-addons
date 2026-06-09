@@ -1,4 +1,4 @@
-import { AddonError, defineAddon } from "@resonance-addons/sdk";
+import { defineAddon } from "@resonance-addons/sdk";
 import { handleAlbum } from "./routes/album";
 import { handleArtist } from "./routes/artist";
 import { handleHome } from "./routes/catalog";
@@ -9,18 +9,20 @@ import { handleAddToPlaylist, handleGetLikeStatus, handleSetLikeStatus } from ".
 import { handlePlaylist, handlePlaylistMore } from "./routes/playlist";
 import { handleQueueMore, handleQueueStart } from "./routes/queue";
 import { handleSearch } from "./routes/search";
+import { handleStream } from "./routes/stream";
 import { handleTTS } from "./routes/tts";
 import { PROVIDER_ID } from "./utils";
 
 interface SpotifyConfig {
   spDc: string;
+  wvdUrl?: string;
 }
 
 export const addon = defineAddon<SpotifyConfig>({
   id: "com.resonance.spotify",
   name: "Spotify",
-  description: "Browse, search, and manage your Spotify library",
-  version: "2.0.1",
+  description: "Stream, browse, search, and manage your Spotify library",
+  version: "2.1.0",
   icon: {
     type: "remote",
     value: "https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green.png",
@@ -49,6 +51,13 @@ export const addon = defineAddon<SpotifyConfig>({
         placeholder: "Paste your sp_dc cookie value",
         isRequired: true,
       },
+      {
+        key: "wvdUrl",
+        type: "password",
+        title: "Key URL",
+        placeholder: "Direct download link to your key file",
+        isRequired: false,
+      },
     ],
   },
   behaviorHints: { configurable: true, configurationRequired: true },
@@ -65,9 +74,7 @@ export const addon = defineAddon<SpotifyConfig>({
       throw new Error(`Unknown catalog: ${id}`);
     },
 
-    resolveStream: () => {
-      throw new AddonError("Spotify cannot stream directly — use cross-provider resolution", 501);
-    },
+    resolveStream: (config, trackId) => handleStream(config.spDc, trackId, config.wvdUrl),
 
     search: (config, query, filter) => handleSearch(config.spDc, query, filter),
 

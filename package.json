@@ -15,6 +15,8 @@
   "scripts": {
     "build": "bun scripts/build.ts",
     "build:am": "bun scripts/build.ts --addon=am-addon",
+    "build:lrclib": "bun scripts/build.ts --addon=lrclib-addon",
+    "build:soundcloud": "bun scripts/build.ts --addon=soundcloud-addon",
     "build:spotify": "bun scripts/build.ts --addon=spotify-addon",
     "build:torbox": "bun scripts/build.ts --addon=torbox-addon",
     "build:ytm": "bun scripts/build.ts --addon=ytm-addon",

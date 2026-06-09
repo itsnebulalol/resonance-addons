@@ -3,7 +3,7 @@ import { type BunPlugin, Glob } from "bun";
 
 const root = join(import.meta.dir, "..");
 
-const defaultAddons = ["ytm-addon", "spotify-addon", "am-addon", "torbox-addon"];
+const defaultAddons = ["ytm-addon", "spotify-addon", "am-addon", "lrclib-addon", "soundcloud-addon", "torbox-addon"];
 const addonArg = process.argv.find((arg) => arg.startsWith("--addon="));
 const addons = addonArg ? [addonArg.split("=")[1]] : defaultAddons;
 

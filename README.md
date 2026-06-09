@@ -11,6 +11,8 @@ All addons are available on the [Resonance Addons homepage](https://resonance.it
 | **YouTube Music** | Stream and browse your YouTube Music library |
 | **Spotify** | Browse, search, and manage your Spotify library |
 | **Apple Music** | Stream and browse Apple Music — home, library, search, playback, lyrics & metadata |
+| **LRCLIB** | Fetch synced and plain lyrics from LRCLIB |
+| **SoundCloud** | Search, stream, browse, and play SoundCloud tracks, profiles, albums, and playlists |
 | **TorBox** | Stream music from cached torrents via TorBox |
 
 ## Development
@@ -31,6 +33,8 @@ bun run build
 bun run build:ytm
 bun run build:spotify
 bun run build:am
+bun run build:lrclib
+bun run build:soundcloud
 bun run build:torbox
 ```
 
@@ -50,6 +54,8 @@ packages/
   ytm-addon/       YouTube Music addon
   spotify-addon/   Spotify addon
   am-addon/        Apple Music addon
+  lrclib-addon/    LRCLIB lyrics addon
+  soundcloud-addon/ SoundCloud addon
   torbox-addon/    TorBox addon
 public/
   index.html       Static homepage
