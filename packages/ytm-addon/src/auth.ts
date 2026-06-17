@@ -32,6 +32,7 @@ export function getRegionContext(): RegionContext {
 }
 
 const tokenCache = new Map<string, { token: string; expires: number }>();
+const tokenInFlight = new Map<string, Promise<string>>();
 const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
 
 const RESPONSE_CACHE_TTL_MS = 15_000;
@@ -104,6 +105,19 @@ export async function mintAccessToken(refreshToken: string): Promise<string> {
     return cached.token;
   }
 
+  const inFlight = tokenInFlight.get(refreshToken);
+  if (inFlight) return inFlight;
+
+  const promise = requestAccessToken(refreshToken);
+  tokenInFlight.set(refreshToken, promise);
+  try {
+    return await promise;
+  } finally {
+    tokenInFlight.delete(refreshToken);
+  }
+}
+
+async function requestAccessToken(refreshToken: string): Promise<string> {
   const scopes = ["https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.force-ssl"].join(
     " ",
   );

@@ -14,3 +14,25 @@ function upscaleThumbnail(url: string): string {
   }
   return url;
 }
+
+export function unwrapPlaylistPanelVideo(item: any, preferVideoId?: string): any | null {
+  if (!item) return null;
+  if (item.playlistPanelVideoRenderer) return item.playlistPanelVideoRenderer;
+  const wrapper = item.playlistPanelVideoWrapperRenderer;
+  if (!wrapper) return null;
+  const primary = wrapper.primaryRenderer?.playlistPanelVideoRenderer ?? null;
+  const candidates = [
+    primary,
+    ...(wrapper.counterpart ?? []).map((c: any) => c?.counterpartRenderer?.playlistPanelVideoRenderer),
+  ].filter(Boolean);
+  if (preferVideoId) {
+    const seedMatch = candidates.find((r: any) => r.videoId === preferVideoId);
+    if (seedMatch) return seedMatch;
+  }
+  const atv = candidates.find(
+    (r: any) =>
+      r.navigationEndpoint?.watchEndpoint?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig
+        ?.musicVideoType === "MUSIC_VIDEO_TYPE_ATV",
+  );
+  return atv ?? primary ?? candidates[0] ?? null;
+}

@@ -2,7 +2,7 @@ import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
 import type { CatalogPage, HomeItem, HomeSection, QuickAccessItem } from "../types";
 import { PROVIDER_ID } from "../utils";
-import { lookupAlbumId } from "./search";
+import { fetchBatchTrackMetadata } from "./queue";
 
 export async function handleHome(refreshToken: string, continuation?: string): Promise<CatalogPage> {
   try {
@@ -81,34 +81,30 @@ export async function handleHome(refreshToken: string, continuation?: string): P
           quickAccess[iflIdx]!.thumbnailURL = "https://i.postimg.cc/TPjG84Sq/edited.webp";
         }
 
-        const albumLookups = new Map<string, string | null>();
-        await Promise.allSettled(
-          quickAccess
-            .filter((qa) => qa.action.type === "playTrack" && qa.action.trackId && qa.action.trackId !== "_ifl")
-            .map(async (qa) => {
-              const artist = qa.artistName ?? "";
-              const albumId = await lookupAlbumId(refreshToken, `${qa.title} ${artist}`, qa.action.trackId!);
-              albumLookups.set(qa.action.trackId!, albumId);
-            }),
-        );
+        const trackIds = quickAccess
+          .filter((qa) => qa.action.type === "playTrack" && qa.action.trackId && qa.action.trackId !== "_ifl")
+          .map((qa) => qa.action.trackId!);
+        const meta = await fetchBatchTrackMetadata(refreshToken, trackIds);
 
         const speedDialItems: HomeItem[] = quickAccess.flatMap((qa): HomeItem[] => {
           switch (qa.action.type) {
             case "playTrack": {
-              const albumId = albumLookups.get(qa.action.trackId!) ?? null;
+              const isIFL = qa.action.trackId === "_ifl";
+              const m = isIFL ? undefined : meta.get(qa.action.trackId!);
               return [
                 {
                   type: "track" as const,
                   track: {
                     id: qa.action.trackId!,
                     provider: PROVIDER_ID,
-                    title: qa.title,
-                    artists: qa.artistName ? [{ id: null, name: qa.artistName }] : [],
-                    album: albumId ? { id: albumId, name: "" } : null,
-                    duration: null,
-                    durationSeconds: null,
-                    thumbnailURL: qa.thumbnailURL,
-                    isExplicit: false,
+                    title: m?.title || qa.title,
+                    artists: m?.artists ?? (qa.artistName ? [{ id: null, name: qa.artistName }] : []),
+                    album: m?.album ?? null,
+                    duration: m?.duration ?? null,
+                    durationSeconds: m?.durationSeconds ?? null,
+                    thumbnailURL: qa.thumbnailURL ?? m?.thumbnailURL ?? null,
+                    isExplicit: m?.isExplicit ?? false,
+                    ...(isIFL ? { isEphemeral: true } : {}),
                   },
                   playlistId: qa.action.playlistId ?? undefined,
                 },
@@ -140,6 +136,19 @@ export async function handleHome(refreshToken: string, continuation?: string): P
                     year: null,
                     thumbnailURL: qa.thumbnailURL,
                     isExplicit: false,
+                  },
+                },
+              ];
+            case "openArtist":
+              return [
+                {
+                  type: "artist" as const,
+                  artist: {
+                    id: qa.action.browseId!,
+                    provider: PROVIDER_ID,
+                    name: qa.title,
+                    thumbnailURL: qa.thumbnailURL,
+                    subscriberCount: null,
                   },
                 },
               ];
@@ -379,6 +388,10 @@ function parseSpeedDialItems(items: any[]): QuickAccessItem[] {
       action = { type: "openPlaylist", browseId: browseId! };
     } else if (browsePageType === "MUSIC_PAGE_TYPE_ALBUM") {
       action = { type: "openAlbum", browseId: browseId! };
+    } else if (browsePageType === "MUSIC_PAGE_TYPE_ARTIST") {
+      // Artist tiles also carry a startPlayback videoId (artist radio); must be checked
+      // before the videoId branch or the tile wrongly plays a song instead of opening the artist.
+      action = { type: "openArtist", browseId: browseId! };
     } else if (videoId) {
       action = { type: "playTrack", trackId: videoId, playlistId };
     } else if (browseId) {

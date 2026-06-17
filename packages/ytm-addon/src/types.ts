@@ -18,6 +18,7 @@ export interface Track {
   durationSeconds: number | null;
   thumbnailURL: string | null;
   isExplicit: boolean;
+  isEphemeral?: boolean;
 }
 
 export interface SearchAlbum {
@@ -74,7 +75,7 @@ export interface CatalogFilter {
 }
 
 export interface QuickAccessAction {
-  type: "playTrack" | "openPlaylist" | "openAlbum";
+  type: "playTrack" | "openPlaylist" | "openAlbum" | "openArtist";
   trackId?: string;
   playlistId?: string;
   browseId?: string;

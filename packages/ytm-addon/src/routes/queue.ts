@@ -2,8 +2,7 @@ import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
 import { resolveIFL } from "../ifl";
 import type { QueueAction, QueueContinuation, QueuePage, Track } from "../types";
-import { bestThumbnail, PROVIDER_ID } from "../utils";
-import { lookupAlbumId } from "./search";
+import { bestThumbnail, PROVIDER_ID, unwrapPlaylistPanelVideo } from "../utils";
 
 export async function handleQueueStart(refreshToken: string, videoId: string, context?: any): Promise<QueuePage> {
   try {
@@ -47,10 +46,11 @@ export async function handleQueueStart(refreshToken: string, videoId: string, co
 
     console.log(`[queue] Starting queue for ${videoId}, playlistId=${body.playlistId}`);
     const data = await ytFetch("next", refreshToken, body);
-    const page = parseNextResponse(data);
+    const page = parseNextResponse(data, undefined, videoId);
 
     if (isIFL && page.tracks.length > 0) {
       page.tracks[0]!.id = "_ifl";
+      page.tracks[0]!.isEphemeral = true;
     }
 
     await enrichAlbumInfo(refreshToken, page.tracks);
@@ -75,8 +75,9 @@ export async function handleQueueMore(refreshToken: string, token: string): Prom
     const tracks: Track[] = [];
     const items = data?.continuationContents?.playlistPanelContinuation?.contents ?? [];
     for (const item of items) {
-      if (item.playlistPanelVideoRenderer) {
-        const track = parsePlaylistPanelVideoRaw(item.playlistPanelVideoRenderer);
+      const renderer = unwrapPlaylistPanelVideo(item);
+      if (renderer) {
+        const track = parsePlaylistPanelVideoRaw(renderer);
         if (track) tracks.push(track);
       }
     }
@@ -129,7 +130,7 @@ export async function handleQueueAction(
       },
     });
 
-    const page = parseNextResponse(data, playlistId);
+    const page = parseNextResponse(data, playlistId, currentTrack.id);
     return page;
   } catch (e: any) {
     console.error("Queue action error:", e.message);
@@ -138,7 +139,7 @@ export async function handleQueueAction(
   }
 }
 
-function parseNextResponse(data: any, overridePlaylistId?: string): QueuePage {
+function parseNextResponse(data: any, overridePlaylistId?: string, seedVideoId?: string): QueuePage {
   const tracks: Track[] = [];
   const actions: QueueAction[] = [];
   let continuation: QueueContinuation | null = null;
@@ -154,8 +155,9 @@ function parseNextResponse(data: any, overridePlaylistId?: string): QueuePage {
 
   if (panel) {
     for (const item of panel.contents ?? []) {
-      if (item.playlistPanelVideoRenderer) {
-        const track = parsePlaylistPanelVideoRaw(item.playlistPanelVideoRenderer);
+      const renderer = unwrapPlaylistPanelVideo(item, seedVideoId);
+      if (renderer) {
+        const track = parsePlaylistPanelVideoRaw(renderer);
         if (track) tracks.push(track);
       }
     }
@@ -228,30 +230,49 @@ function parseNextResponse(data: any, overridePlaylistId?: string): QueuePage {
 }
 
 async function enrichAlbumInfo(refreshToken: string, tracks: Track[]): Promise<void> {
-  const needsAlbum = tracks.filter((t) => !t.album).slice(0, 5);
+  const needsAlbum = tracks.filter((t) => !t.album);
   if (!needsAlbum.length) return;
 
-  const results = await Promise.allSettled(
-    needsAlbum.map(async (t) => {
-      const artist = t.artists[0]?.name ?? "";
-      const albumId = await lookupAlbumId(refreshToken, `${t.title} ${artist}`, t.id);
-      return { trackId: t.id, albumId };
-    }),
+  const meta = await fetchBatchTrackMetadata(
+    refreshToken,
+    needsAlbum.map((t) => t.id),
   );
 
   let enriched = 0;
-  for (const result of results) {
-    if (result.status !== "fulfilled" || !result.value.albumId) continue;
-    const track = tracks.find((t) => t.id === result.value.trackId);
-    if (track) {
-      (track as any).album = { id: result.value.albumId, name: "" };
+  for (const track of needsAlbum) {
+    const album = meta.get(track.id)?.album;
+    if (album?.id) {
+      track.album = album;
       enriched++;
     }
   }
-  if (enriched > 0) console.log(`[queue] Enriched ${enriched}/${needsAlbum.length} tracks with album IDs`);
+  if (enriched > 0) console.log(`[queue] Enriched ${enriched}/${needsAlbum.length} tracks with album info`);
 }
 
-function parsePlaylistPanelVideoRaw(renderer: any): Track | null {
+export async function fetchBatchTrackMetadata(
+  refreshToken: string,
+  videoIds: string[],
+): Promise<Map<string, Track>> {
+  const result = new Map<string, Track>();
+  const ids = [...new Set(videoIds.filter(Boolean))].slice(0, 50);
+  if (ids.length === 0) return result;
+
+  try {
+    const data = await ytFetch("music/get_queue", refreshToken, { videoIds: ids });
+    const queueDatas = data?.queueDatas ?? [];
+    for (const qd of queueDatas) {
+      const renderer = unwrapPlaylistPanelVideo(qd?.content);
+      if (!renderer) continue;
+      const track = parsePlaylistPanelVideoRaw(renderer);
+      if (track) result.set(track.id, track);
+    }
+  } catch (e: any) {
+    console.error("[metadata] get_queue batch failed:", e.message);
+  }
+  return result;
+}
+
+export function parsePlaylistPanelVideoRaw(renderer: any): Track | null {
   const videoId = renderer.videoId;
   if (!videoId) return null;
 

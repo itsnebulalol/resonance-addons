@@ -1,4 +1,5 @@
 import { ytFetch } from "./auth";
+import { unwrapPlaylistPanelVideo } from "./utils";
 
 interface IFLEntry {
   promise: Promise<string>;
@@ -21,7 +22,7 @@ async function fetchRandomSeed(refreshToken: string): Promise<string> {
       ?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer?.content?.playlistPanelRenderer;
 
   const seeds = (panel?.contents ?? [])
-    .map((c: any) => c.playlistPanelVideoRenderer?.videoId)
+    .map((c: any) => unwrapPlaylistPanelVideo(c)?.videoId)
     .filter(Boolean) as string[];
 
   if (seeds.length === 0) throw new Error("No liked music tracks found for IFL");
