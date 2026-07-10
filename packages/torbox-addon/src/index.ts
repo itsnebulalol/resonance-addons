@@ -13,7 +13,7 @@ export const addon = defineAddon<TorBoxConfig>({
   id: PROVIDER_ID,
   name: "TorBox",
   description: "Stream music from cached torrents via TorBox",
-  version: "1.0.0",
+  version: "1.0.1",
   icon: { type: "remote", value: "https://torbox.app/favicon.ico" },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },

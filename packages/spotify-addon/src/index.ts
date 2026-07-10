@@ -22,7 +22,7 @@ export const addon = defineAddon<SpotifyConfig>({
   id: "com.resonance.spotify",
   name: "Spotify",
   description: "Stream, browse, search, and manage your Spotify library",
-  version: "2.1.0",
+  version: "2.1.1",
   icon: {
     type: "remote",
     value: "https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green.png",
@@ -95,7 +95,8 @@ export const addon = defineAddon<SpotifyConfig>({
 
     // Lyrics, Metadata, TTS (existing)
     fetchLyrics: (config, title, artist, videoId) => handleLyrics(config.spDc, title, artist, videoId),
-    fetchMetadata: (config, title, artist) => handleMetadata(config.spDc, title, artist),
+    fetchMetadata: (config, title, artist, trackId, trackProvider, thumbnailURL) =>
+      handleMetadata(config.spDc, title, artist, trackId, trackProvider, thumbnailURL),
     getVoices: async () => [
       { id: "1", name: "Voice 1" },
       { id: "2", name: "Voice 2" },

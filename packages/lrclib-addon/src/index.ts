@@ -7,7 +7,7 @@ export const addon = defineAddon({
   id: PROVIDER_ID,
   name: "LRCLIB",
   description: "Fetch synced and plain lyrics from LRCLIB",
-  version: "1.0.0",
+  version: "1.0.1",
   icon: {
     type: "remote",
     value: "https://lrclib.net/assets/lrclib-370c57eb.png",

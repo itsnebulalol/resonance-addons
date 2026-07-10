@@ -14,7 +14,7 @@ export const addon = defineAddon<SoundCloudConfig>({
   id: PROVIDER_ID,
   name: "SoundCloud",
   description: "Search, stream, browse, and play SoundCloud tracks, profiles, albums, and playlists",
-  version: "1.0.0",
+  version: "1.0.1",
   icon: {
     type: "remote",
     value: "https://cdn-icons-png.flaticon.com/512/48/48967.png",
@@ -67,7 +67,13 @@ export const addon = defineAddon<SoundCloudConfig>({
     setLikeStatus: (config: SoundCloudConfig, status: string, trackId: string) =>
       handleLike(config, status as "liked" | "disliked" | "none", trackId).then(() => {}),
     getLikeStatus: (config: SoundCloudConfig, trackId: string) => handleGetLikeStatus(config, trackId),
-    fetchMetadata: (config: SoundCloudConfig, title?: string, artist?: string) => handleMetadata(config, title, artist),
+    fetchMetadata: (
+      config: SoundCloudConfig,
+      title?: string,
+      artist?: string,
+      trackId?: string,
+      trackProvider?: string,
+    ) => handleMetadata(config, title, artist, trackId, trackProvider),
   },
   capabilities: {
     supportsRadio: true,

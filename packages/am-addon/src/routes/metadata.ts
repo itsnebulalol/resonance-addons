@@ -1,6 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { amFetch } from "../cached-fetch";
 import { getDeveloperToken } from "../token";
+import { PROVIDER_ID } from "../utils";
 import { searchSong } from "./search";
 
 const API_BASE = "https://amp-api.music.apple.com";
@@ -20,21 +21,35 @@ const EMPTY_METADATA: TrackMetadata = {
   externalIDs: null,
 };
 
-export async function handleMetadata(title?: string, artist?: string): Promise<TrackMetadata> {
+export async function handleMetadata(
+  title?: string,
+  artist?: string,
+  trackId?: string,
+  trackProvider?: string,
+): Promise<TrackMetadata> {
   try {
-    if (!title && !artist) {
-      return EMPTY_METADATA;
+    const exactSongId = trackProvider === PROVIDER_ID ? trackId?.trim() : undefined;
+    let songId = exactSongId;
+    let durationSeconds: number | null = null;
+
+    if (!songId) {
+      if (!title && !artist) {
+        return EMPTY_METADATA;
+      }
+
+      console.log(`[metadata] Searching: "${title}" — "${artist}"`);
+      const result = await searchSong(title ?? "", artist ?? "");
+      if (!result) {
+        console.log("[metadata] No search result");
+        return EMPTY_METADATA;
+      }
+      songId = result.songId;
+      durationSeconds = result.durationSeconds;
     }
 
-    console.log(`[metadata] Searching: "${title}" — "${artist}"`);
-    const result = await searchSong(title ?? "", artist ?? "");
-    if (!result) {
-      console.log("[metadata] No search result");
-      return EMPTY_METADATA;
-    }
-    console.log(`[metadata] Resolved songId=${result.songId}`);
+    console.log(`[metadata] Resolved songId=${songId}`);
 
-    const metadata = await fetchMetadata(result.songId, result.durationSeconds);
+    const metadata = await fetchMetadata(songId, durationSeconds);
     console.log(`[metadata] Got artwork: ${metadata.fullscreenArtworkURL ? "yes" : "no"}`);
     return metadata;
   } catch (e: any) {
@@ -68,6 +83,10 @@ async function fetchMetadata(songId: string, durationSeconds: number | null): Pr
   const songData = (await songRes.json()) as any;
   const song = songData?.data?.[0];
   const attrs = song?.attributes;
+  const externalIDs: Record<string, string> = { appleMusicId: songId };
+  if (typeof attrs?.isrc === "string" && attrs.isrc.trim()) {
+    externalIDs.isrc = attrs.isrc.trim();
+  }
 
   let fullscreenArtworkURL: string | null = null;
   if (attrs?.artwork?.url) {
@@ -88,8 +107,9 @@ async function fetchMetadata(songId: string, durationSeconds: number | null): Pr
   return {
     fullscreenArtworkURL,
     animatedArtworkURL,
-    resolvedDurationSeconds: durationSeconds,
-    externalIDs: { appleMusicId: songId },
+    resolvedDurationSeconds:
+      typeof attrs?.durationInMillis === "number" ? Math.round(attrs.durationInMillis / 1000) : durationSeconds,
+    externalIDs,
   };
 }
 

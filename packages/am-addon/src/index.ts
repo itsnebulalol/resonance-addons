@@ -19,7 +19,7 @@ export const addon = defineAddon<AMConfig>({
   id: PROVIDER_ID,
   name: "Apple Music",
   description: "Stream and browse Apple Music — home, library, search, playback, lyrics & metadata",
-  version: "1.0.1",
+  version: "1.0.2",
   icon: { type: "bundled", value: "applemusic" },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },
@@ -115,9 +115,9 @@ export const addon = defineAddon<AMConfig>({
       setUserToken(config.userToken);
       return handleLyrics(title, artist, videoId);
     },
-    fetchMetadata: (config, title, artist) => {
+    fetchMetadata: (config, title, artist, trackId, trackProvider) => {
       setUserToken(config.userToken);
-      return handleMetadata(title, artist);
+      return handleMetadata(title, artist, trackId, trackProvider);
     },
   },
   capabilities: {

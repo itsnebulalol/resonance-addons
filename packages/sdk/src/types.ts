@@ -91,7 +91,14 @@ export interface AddonHandlers<TConfig> {
   getRelated?: (config: TConfig, browseId: string) => Promise<any[]>;
   getRelatedForTrack?: (config: TConfig, trackId: string) => Promise<any[]>;
   fetchLyrics?: (config: TConfig, title: string, artist: string, videoId: string) => Promise<any | null>;
-  fetchMetadata?: (config: TConfig, title: string, artist: string) => Promise<any>;
+  fetchMetadata?: (
+    config: TConfig,
+    title: string,
+    artist: string,
+    trackId?: string,
+    trackProvider?: string,
+    thumbnailURL?: string,
+  ) => Promise<any>;
   translate?: (config: TConfig, lines: string[], language: string) => Promise<string[]>;
   getVoices?: (config: TConfig) => Promise<any[]>;
   synthesize?: (config: TConfig, text: string, voiceId?: string) => Promise<{ data: string; contentType: string }>;

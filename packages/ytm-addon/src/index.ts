@@ -23,7 +23,7 @@ export const addon = defineAddon<YTMConfig>({
   id: PROVIDER_ID,
   name: "YouTube Music",
   description: "Stream and browse your YouTube Music library",
-  version: "1.0.4",
+  version: "1.0.5",
   icon: { type: "remote", value: "https://i.postimg.cc/KjDMdWyX/You-Tube-Music-2024-svg.png" },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },
