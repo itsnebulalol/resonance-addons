@@ -1,4 +1,3 @@
-import { getAccessToken } from "../auth";
 import { searchSpotifyTrack } from "./search";
 
 export async function handleMetadata(spDc: string, title?: string, artist?: string): Promise<any> {
@@ -11,8 +10,7 @@ export async function handleMetadata(spDc: string, title?: string, artist?: stri
     };
   }
 
-  const token = await getAccessToken(spDc);
-  const result = await searchSpotifyTrack(token, title ?? "", artist ?? "");
+  const result = await searchSpotifyTrack(spDc, title ?? "", artist ?? "");
   if (!result) {
     return {
       fullscreenArtworkURL: null,

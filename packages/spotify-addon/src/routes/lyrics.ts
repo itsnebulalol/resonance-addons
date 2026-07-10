@@ -26,7 +26,7 @@ export async function handleLyrics(spDc: string, title?: string, artist?: string
 
   const token = await getAccessToken(spDc);
 
-  const result = await searchSpotifyTrack(token, title ?? "", artist ?? "");
+  const result = await searchSpotifyTrack(spDc, title ?? "", artist ?? "");
   if (!result) return null;
   const spotifyTrackId = result.id;
 

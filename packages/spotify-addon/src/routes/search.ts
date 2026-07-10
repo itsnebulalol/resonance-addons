@@ -1,157 +1,114 @@
 import { AddonError } from "@resonance-addons/sdk";
-import { spotifyFetch } from "../auth";
-import type { SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem, Track } from "../types";
-import { PROVIDER_ID, spclientGet, uriToId } from "../utils";
-
-interface SearchArtistHit {
-  name: string;
-  uri?: string;
-}
-
-interface TrackHit {
-  uri: string;
-  name: string;
-  image?: string;
-  artists?: SearchArtistHit[];
-}
-
-interface AlbumHit {
-  uri: string;
-  name: string;
-  image?: string;
-  artists?: SearchArtistHit[];
-}
-
-interface ArtistHit {
-  uri: string;
-  name: string;
-  image?: string;
-}
-
-interface PlaylistHit {
-  uri: string;
-  name: string;
-  image?: string;
-  owner?: { name?: string };
-}
+import type { SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem } from "../types";
+import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, transformGraphQLTrack, uriToId } from "../utils";
 
 interface SearchResponse {
-  results?: {
-    tracks?: { hits?: TrackHit[] };
-    albums?: { hits?: AlbumHit[] };
-    artists?: { hits?: ArtistHit[] };
-    playlists?: { hits?: PlaylistHit[] };
+  searchV2?: {
+    topResultsV2?: {
+      itemsV2?: Array<{
+        item?: {
+          __typename?: string;
+          data?: any;
+        };
+      }>;
+    };
   };
 }
 
-function trackItem(hit: TrackHit): SearchResultItem {
-  const track: Track = {
-    id: uriToId(hit.uri),
-    provider: PROVIDER_ID,
-    title: hit.name ?? "",
-    artists: (hit.artists ?? []).map((artist) => ({
-      id: artist.uri ? uriToId(artist.uri) : null,
-      name: artist.name ?? "",
-    })),
-    album: null,
-    duration: null,
-    durationSeconds: null,
-    thumbnailURL: hit.image ?? null,
-    isExplicit: false,
-  };
-
-  return { type: "track", track };
-}
-
-function albumItem(hit: AlbumHit): SearchResultItem {
+function albumItem(data: any): SearchResultItem {
+  const year =
+    typeof data.date?.year === "number" || typeof data.date?.year === "string"
+      ? String(data.date.year)
+      : typeof data.date?.isoString === "string"
+        ? data.date.isoString.slice(0, 4)
+        : null;
   const album: SearchAlbum = {
-    id: uriToId(hit.uri),
+    id: uriToId(data.uri),
     provider: PROVIDER_ID,
-    title: hit.name ?? "",
-    artists: (hit.artists ?? []).map((artist) => ({
+    title: data.name ?? "",
+    artists: (data.artists?.items ?? []).map((artist: any) => ({
       id: artist.uri ? uriToId(artist.uri) : null,
-      name: artist.name ?? "",
+      name: artist.profile?.name ?? artist.name ?? "",
     })),
-    year: null,
-    thumbnailURL: hit.image ?? null,
-    isExplicit: false,
+    year,
+    thumbnailURL: bestImageFromSources(data.coverArt?.sources ?? []),
+    isExplicit: data.contentRating?.label === "EXPLICIT",
   };
 
   return { type: "album", album };
 }
 
-function artistItem(hit: ArtistHit): SearchResultItem {
+function artistItem(data: any): SearchResultItem {
   const artist: SearchArtist = {
-    id: uriToId(hit.uri),
+    id: uriToId(data.uri),
     provider: PROVIDER_ID,
-    name: hit.name ?? "",
-    thumbnailURL: hit.image ?? null,
+    name: data.profile?.name ?? data.name ?? "",
+    thumbnailURL: bestImageFromSources(data.visuals?.avatarImage?.sources ?? []),
     subscriberCount: null,
   };
 
   return { type: "artist", artist };
 }
 
-function playlistItem(hit: PlaylistHit): SearchResultItem {
+function playlistItem(data: any): SearchResultItem {
+  const imageSources = (data.images?.items ?? []).flatMap((item: any) => item?.sources ?? []);
   const playlist: SearchPlaylist = {
-    id: uriToId(hit.uri),
+    id: uriToId(data.uri),
     provider: PROVIDER_ID,
-    title: hit.name ?? "",
-    author: hit.owner?.name ?? null,
+    title: data.name ?? "",
+    author: data.ownerV2?.data?.name ?? data.owner?.name ?? null,
     trackCount: null,
-    thumbnailURL: hit.image ?? null,
+    thumbnailURL: bestImageFromSources(imageSources),
   };
 
   return { type: "playlist", playlist };
 }
 
+function searchItem(wrapper: { __typename?: string; data?: any } | undefined): SearchResultItem | null {
+  const data = wrapper?.data;
+  if (!data?.uri) return null;
+
+  switch (wrapper?.__typename) {
+    case "TrackResponseWrapper":
+      return { type: "track", track: transformGraphQLTrack(data) };
+    case "AlbumResponseWrapper":
+      return albumItem(data);
+    case "ArtistResponseWrapper":
+      return artistItem(data);
+    case "PlaylistResponseWrapper":
+      return playlistItem(data);
+    default:
+      return null;
+  }
+}
+
 export async function handleSearch(spDc: string, query: string, filter?: string): Promise<SearchResultItem[]> {
   try {
-    const typeMap: Record<string, string> = {
+    const data = (await pf(spDc, {
+      name: "searchSuggestions",
+      hash: OperationHash.searchSuggestions,
+      variables: {
+        query,
+        limit: 30,
+        numberOfTopResults: 30,
+        offset: 0,
+        includeAuthors: false,
+        includeAlbumPreReleases: false,
+        includeEpisodeContentRatingsV2: false,
+      },
+    })) as SearchResponse;
+    const items = (data?.searchV2?.topResultsV2?.itemsV2 ?? [])
+      .map((hit) => searchItem(hit.item))
+      .filter((item): item is SearchResultItem => item !== null);
+
+    const typeForFilter: Record<string, SearchResultItem["type"]> = {
       songs: "track",
       albums: "album",
       artists: "artist",
       playlists: "playlist",
     };
-
-    const entityType = filter && typeMap[filter] ? typeMap[filter] : "track,album,artist,playlist";
-    const data = (await spclientGet(
-      spDc,
-      `/searchview/km/v4/search/${encodeURIComponent(query)}?limit=20&entityType=${encodeURIComponent(entityType)}&catalogue=&country=US&locale=en&platform=web`,
-    )) as SearchResponse;
-
-    const tracks = (data?.results?.tracks?.hits ?? []).map((hit) => trackItem(hit));
-    const albums = (data?.results?.albums?.hits ?? []).map((hit) => albumItem(hit));
-    const artists = (data?.results?.artists?.hits ?? []).map((hit) => artistItem(hit));
-    const playlists = (data?.results?.playlists?.hits ?? []).map((hit) => playlistItem(hit));
-
-    if (filter && typeMap[filter]) {
-      switch (typeMap[filter]) {
-        case "track":
-          return tracks;
-        case "album":
-          return albums;
-        case "artist":
-          return artists;
-        case "playlist":
-          return playlists;
-        default:
-          return tracks;
-      }
-    }
-
-    const mixed: SearchResultItem[] = [...tracks];
-    const albumQueue = [...albums];
-    const artistQueue = [...artists];
-    const playlistQueue = [...playlists];
-
-    while (albumQueue.length || artistQueue.length || playlistQueue.length) {
-      if (albumQueue.length) mixed.push(albumQueue.shift()!);
-      if (artistQueue.length) mixed.push(artistQueue.shift()!);
-      if (playlistQueue.length) mixed.push(playlistQueue.shift()!);
-    }
-
-    return mixed;
+    const type = filter ? typeForFilter[filter] : undefined;
+    return type ? items.filter((item) => item.type === type) : items;
   } catch (e: any) {
     if (e instanceof AddonError) throw e;
     throw new AddonError(e?.message ?? "Failed to search", 500);
@@ -159,36 +116,24 @@ export async function handleSearch(spDc: string, query: string, filter?: string)
 }
 
 export async function searchSpotifyTrack(
-  token: string,
+  spDc: string,
   title: string,
   artist: string,
 ): Promise<{ id: string; image: string | null } | null> {
-  const query = encodeURIComponent(`${title} ${artist}`);
-  const res = await spotifyFetch(
-    `https://spclient.wg.spotify.com/searchview/km/v4/search/${query}?limit=5&entityType=track&catalogue=&country=US&locale=en&platform=web`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "app-platform": "WebPlayer",
-      },
-    },
-  );
-
-  if (!res.ok) return null;
-
-  const data = (await res.json()) as SearchResponse;
-  const hits = data?.results?.tracks?.hits ?? [];
+  const hits = (await handleSearch(spDc, `${title} ${artist}`, "songs"))
+    .filter((item): item is Extract<SearchResultItem, { type: "track" }> => item.type === "track")
+    .map((item) => item.track);
   if (!hits.length) return null;
 
   const artistLower = artist.toLowerCase();
   for (const hit of hits) {
-    for (const a of hit.artists ?? []) {
+    for (const a of hit.artists) {
       const name = a.name.toLowerCase();
       if (name.includes(artistLower) || artistLower.includes(name)) {
-        return { id: uriToId(hit.uri), image: hit.image ?? null };
+        return { id: hit.id, image: hit.thumbnailURL ?? null };
       }
     }
   }
 
-  return { id: uriToId(hits[0]!.uri), image: hits[0]!.image ?? null };
+  return { id: hits[0]!.id, image: hits[0]!.thumbnailURL ?? null };
 }

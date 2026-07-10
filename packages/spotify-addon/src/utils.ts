@@ -1,4 +1,4 @@
-import { getAccessToken, type PathfinderOperation, pathfinderRequest, spotifyFetch } from "./auth";
+import { type PathfinderOperation, pathfinderRequest } from "./auth";
 import type { ArtistRef, Track } from "./types";
 
 export const PROVIDER_ID = "com.resonance.spotify";
@@ -18,6 +18,7 @@ export const OperationHash = {
   internalLinkRecommenderTrack: "c77098ee9d6ee8ad3eb844938722db60570d040b49f41f5ec6e7be9160a7c86b",
   homeSection: "c11ff5d8f508cb1a3dad3f15ee80611cda7df7e6fb45212e466fb3e84a680bf9",
   home: "eb3fba2d388cf4fc4d696b1757a58584e9538a3b515ea742e9cc9465807340be",
+  searchSuggestions: "556f5a15b2fdd3a7113ffd377ad9805e38a3a27b8bb1ca7d6d76bad54aa8ee12",
 };
 
 export function uriToId(uri: string): string {
@@ -95,22 +96,6 @@ export function transformGraphQLTrack(trackData: any): Track {
 export async function pf(spDc: string, op: PathfinderOperation): Promise<any> {
   const result = await pathfinderRequest(spDc, op);
   return result?.data;
-}
-
-export async function spclientGet(spDc: string, path: string): Promise<any> {
-  const token = await getAccessToken(spDc);
-  const res = await spotifyFetch(`https://spclient.wg.spotify.com${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      "app-platform": "WebPlayer",
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`spclient ${res.status}: ${text.slice(0, 200)}`);
-  }
-  return res.json();
 }
 
 export async function getUserId(spDc: string): Promise<string> {
