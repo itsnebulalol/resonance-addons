@@ -67,12 +67,21 @@ export interface StreamResult {
   format?: string | null;
   keyId?: string;
   key?: string;
-  trackingURL?: string;
-  trackingHeaders?: Record<string, string>;
+}
+
+export interface HistoryEvent {
+  playbackId: string;
+  startedAtMs: number;
+  reportedAtMs: number;
+  listenedSeconds: number;
+  positionSeconds: number;
+  durationSeconds?: number | null;
+  completed: boolean;
 }
 
 export interface AddonHandlers<TConfig> {
   resolveStream?: (config: TConfig, trackId: string) => Promise<StreamResult>;
+  recordHistory?: (config: TConfig, trackId: string, event: HistoryEvent) => Promise<void>;
   getCatalog?: (config: TConfig, id: string, extra?: any) => Promise<any>;
   applyFilter?: (config: TConfig, filterPayload: any) => Promise<any>;
   getQuickAccess?: (config: TConfig) => Promise<any[] | null>;

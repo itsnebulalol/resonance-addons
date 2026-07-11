@@ -8,11 +8,11 @@ All addons are available on the [Resonance Addons homepage](https://resonance.it
 
 | Addon | Description |
 |-------|-------------|
-| **YouTube Music** | Stream and browse your YouTube Music library |
-| **Spotify** | Browse, search, and manage your Spotify library |
-| **Apple Music** | Stream and browse Apple Music — home, library, search, playback, lyrics & metadata |
+| **YouTube Music** | Stream, browse, and sync listening history |
+| **Spotify** | Stream, browse, search, manage your library, and sync listening history |
+| **Apple Music** | Stream, browse, and sync playback, history, lyrics & metadata |
 | **LRCLIB** | Fetch synced and plain lyrics from LRCLIB |
-| **SoundCloud** | Search, stream, browse, and play SoundCloud tracks, profiles, albums, and playlists |
+| **SoundCloud** | Search, stream, browse, and sync tracks, profiles, albums, playlists, and history |
 | **TorBox** | Stream music from cached torrents via TorBox |
 
 ## Development
@@ -84,6 +84,23 @@ export const addon = defineAddon({
   },
 });
 ```
+
+### History Providers
+
+Declare `{ type: "history", idPrefixes: [...] }` and implement
+`recordHistory(config, trackId, event)` to sync committed listens. Resonance resolves tracks from
+other catalog providers before calling the handler, so `trackId` is already in the History
+provider's namespace.
+
+```ts
+recordHistory: async (config, trackId, event) => {
+  // Translate the committed listen into the provider's scrobble or playback-reporting API.
+}
+```
+
+`event` includes `playbackId`, `startedAtMs`, `reportedAtMs`, `listenedSeconds`,
+`positionSeconds`, `durationSeconds`, and `completed`. History providers are independently enabled
+with checkboxes; every checked provider receives the listen.
 
 The build script bundles each addon into a self-contained IIFE that sets `globalThis.__resonance_addon__` when executed.
 

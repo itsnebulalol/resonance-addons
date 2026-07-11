@@ -2,6 +2,7 @@ import { defineAddon } from "@resonance-addons/sdk";
 import { handleAlbum } from "./routes/album";
 import { handleArtist } from "./routes/artist";
 import { handleHome } from "./routes/catalog";
+import { handleHistory } from "./routes/history";
 import { handleLibrary } from "./routes/library";
 import { handleLyrics } from "./routes/lyrics";
 import { handleMetadata } from "./routes/metadata";
@@ -21,8 +22,8 @@ interface SpotifyConfig {
 export const addon = defineAddon<SpotifyConfig>({
   id: "com.resonance.spotify",
   name: "Spotify",
-  description: "Stream, browse, search, and manage your Spotify library",
-  version: "2.1.1",
+  description: "Stream, browse, search, manage your library, and sync listening history with Spotify",
+  version: "2.2.0",
   icon: {
     type: "remote",
     value: "https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green.png",
@@ -36,6 +37,7 @@ export const addon = defineAddon<SpotifyConfig>({
       ],
     },
     { type: "stream", idPrefixes: [PROVIDER_ID] },
+    { type: "history", idPrefixes: [PROVIDER_ID] },
     { type: "lyrics", syncTypes: ["wordSynced", "lineSynced"] },
     { type: "metadata" },
     { type: "tts" },
@@ -75,6 +77,7 @@ export const addon = defineAddon<SpotifyConfig>({
     },
 
     resolveStream: (config, trackId) => handleStream(config.spDc, trackId, config.wvdUrl),
+    recordHistory: (config, trackId, event) => handleHistory(config.spDc, trackId, event),
 
     search: (config, query, filter) => handleSearch(config.spDc, query, filter),
 

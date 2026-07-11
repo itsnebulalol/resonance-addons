@@ -2,6 +2,7 @@ import { defineAddon } from "@resonance-addons/sdk";
 import { PROVIDER_ID, type SoundCloudConfig } from "./api";
 import { handleHome } from "./routes/catalog";
 import { handleAlbum, handleArtist, handlePlaylist, handlePlaylistMore } from "./routes/detail";
+import { handleHistory } from "./routes/history";
 import { handleLibrary } from "./routes/library";
 import { handleMetadata } from "./routes/metadata";
 import { handleGetLikeStatus, handleLike } from "./routes/mutations";
@@ -13,14 +14,15 @@ import { handleStream } from "./routes/stream";
 export const addon = defineAddon<SoundCloudConfig>({
   id: PROVIDER_ID,
   name: "SoundCloud",
-  description: "Search, stream, browse, and play SoundCloud tracks, profiles, albums, and playlists",
-  version: "1.0.1",
+  description: "Search, stream, browse, and sync SoundCloud tracks, profiles, albums, playlists, and history",
+  version: "1.1.0",
   icon: {
     type: "remote",
     value: "https://cdn-icons-png.flaticon.com/512/48/48967.png",
   },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },
+    { type: "history", idPrefixes: [PROVIDER_ID] },
     {
       type: "catalog",
       catalogs: [
@@ -32,7 +34,7 @@ export const addon = defineAddon<SoundCloudConfig>({
   ],
   auth: {
     type: "token",
-    label: "Optional: enter your SoundCloud oauth_token cookie for your library and like status.",
+    label: "Optional: enter your SoundCloud oauth_token cookie for library, likes, and history.",
     fields: [
       {
         key: "oauthToken",
@@ -46,6 +48,7 @@ export const addon = defineAddon<SoundCloudConfig>({
   behaviorHints: { configurable: true, configurationRequired: false },
   handlers: {
     resolveStream: (config: SoundCloudConfig, trackId: string) => handleStream(config, trackId),
+    recordHistory: (config: SoundCloudConfig, trackId: string, event) => handleHistory(config, trackId, event),
     getCatalog: (config: SoundCloudConfig, id: string, extra?: any) => {
       const params = extra?.params ?? extra ?? {};
       if (id === "home") return handleHome(config, params.continuation);

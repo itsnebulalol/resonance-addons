@@ -2,6 +2,7 @@ import { defineAddon } from "@resonance-addons/sdk";
 import { handleAlbum } from "./routes/album";
 import { handleArtist } from "./routes/artist";
 import { handleHome } from "./routes/catalog";
+import { handleHistory } from "./routes/history";
 import { handleLibrary } from "./routes/library";
 import { handleLyrics } from "./routes/lyrics";
 import { handleAddToPlaylist, handleGetLikeStatus, handleLike } from "./routes/mutations";
@@ -22,11 +23,12 @@ interface YTMConfig {
 export const addon = defineAddon<YTMConfig>({
   id: PROVIDER_ID,
   name: "YouTube Music",
-  description: "Stream and browse your YouTube Music library",
-  version: "1.0.5",
+  description: "Stream, browse, and sync listening history with YouTube Music",
+  version: "1.1.0",
   icon: { type: "remote", value: "https://i.postimg.cc/KjDMdWyX/You-Tube-Music-2024-svg.png" },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },
+    { type: "history", idPrefixes: [PROVIDER_ID] },
     {
       type: "catalog",
       catalogs: [
@@ -48,6 +50,7 @@ export const addon = defineAddon<YTMConfig>({
   behaviorHints: { configurable: true, configurationRequired: true },
   handlers: {
     resolveStream: (config, trackId) => handleStream(config.refreshToken, trackId),
+    recordHistory: (config, trackId, event) => handleHistory(config.refreshToken, trackId, event),
     getCatalog: (config, id, extra) => {
       const params = extra?.params ?? extra ?? {};
       if (id === "home") {

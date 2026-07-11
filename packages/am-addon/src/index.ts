@@ -1,6 +1,7 @@
 import { defineAddon } from "@resonance-addons/sdk";
 import { handleHome, handleLibrary, handleSearch, handleSearchSuggestions } from "./routes/catalog";
 import { handleAlbum, handleArtist, handlePlaylist, handlePlaylistMore } from "./routes/detail";
+import { handleHistory } from "./routes/history";
 import { handleLyrics } from "./routes/lyrics";
 import { handleMetadata } from "./routes/metadata";
 import { handleAddToPlaylist, handleGetLikeStatus, handleLike } from "./routes/mutations";
@@ -18,11 +19,12 @@ interface AMConfig {
 export const addon = defineAddon<AMConfig>({
   id: PROVIDER_ID,
   name: "Apple Music",
-  description: "Stream and browse Apple Music — home, library, search, playback, lyrics & metadata",
-  version: "1.0.2",
+  description: "Stream, browse, and sync Apple Music playback, history, lyrics, and metadata",
+  version: "1.1.0",
   icon: { type: "bundled", value: "applemusic" },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },
+    { type: "history", idPrefixes: [PROVIDER_ID] },
     {
       type: "catalog",
       catalogs: [
@@ -51,6 +53,10 @@ export const addon = defineAddon<AMConfig>({
     resolveStream: (config, trackId) => {
       setUserToken(config.userToken);
       return handleStream(trackId);
+    },
+    recordHistory: (config, trackId, event) => {
+      setUserToken(config.userToken);
+      return handleHistory(trackId, event);
     },
     getCatalog: (config, id, extra) => {
       setUserToken(config.userToken);
