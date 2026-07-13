@@ -8,12 +8,11 @@ All addons are available on the [Resonance Addons homepage](https://resonance.it
 
 | Addon | Description |
 |-------|-------------|
-| **YouTube Music** | Stream, browse, and sync listening history |
-| **Spotify** | Stream, browse, search, manage your library, and sync listening history |
-| **Apple Music** | Stream, browse, and sync playback, history, lyrics & metadata |
-| **LRCLIB** | Fetch synced and plain lyrics from LRCLIB |
-| **SoundCloud** | Search, stream, browse, and sync tracks, profiles, albums, playlists, and history |
-| **TorBox** | Stream music from cached torrents via TorBox |
+| **YouTube Music** | Stream, browse, search, manage your library, and sync listening history with YouTube Music |
+| **Spotify** | Stream, browse, search, manage your library, and sync listening history with Spotify |
+| **Apple Music** | Stream, browse, search, manage your library, and sync listening history with Apple Music |
+| **LRCLIB** | Fetch synchronized and plain-text lyrics from LRCLIB |
+| **SoundCloud** | Stream, browse, search, manage your library, and sync listening history with SoundCloud |
 
 ## Development
 
@@ -26,16 +25,15 @@ bun install
 ### Build
 
 ```sh
-# Build all addons
+# Build all addons as .resonance packages
 bun run build
 
 # Build a single addon
-bun run build:ytm
+bun run build:youtubemusic
 bun run build:spotify
-bun run build:am
+bun run build:applemusic
 bun run build:lrclib
 bun run build:soundcloud
-bun run build:torbox
 ```
 
 ### Lint & Format
@@ -50,18 +48,18 @@ bun run format   # format only (auto-fix)
 
 ```
 packages/
-  sdk/             Shared addon SDK (defineAddon, types, errors)
-  ytm-addon/       YouTube Music addon
-  spotify-addon/   Spotify addon
-  am-addon/        Apple Music addon
-  lrclib-addon/    LRCLIB lyrics addon
-  soundcloud-addon/ SoundCloud addon
-  torbox-addon/    TorBox addon
+  sdk/                  Shared addon SDK (defineAddon, types, errors)
+  youtubemusic-addon/   YouTube Music addon
+  spotify-addon/        Spotify addon
+  applemusic-addon/     Apple Music addon
+  lrclib-addon/         LRCLIB lyrics addon
+  soundcloud-addon/     SoundCloud addon
 public/
-  index.html       Static homepage
+  index.html            Static homepage
 scripts/
-  build.ts         Builds all addons using Bun.build()
-  smoke.ts         Smoke tests for built bundles
+  addons.ts             Canonical addon metadata and build list
+  build.ts              Builds all addons using Bun.build()
+  smoke.ts              Smoke tests for built bundles
 ```
 
 ## Creating an Addon
@@ -72,11 +70,11 @@ Each addon uses `defineAddon` from `@resonance-addons/sdk` to declare its manife
 import { defineAddon } from "@resonance-addons/sdk";
 
 export const addon = defineAddon({
-  id: "com.resonance.example",
+  id: "net.itsnebula.example",
   name: "Example",
   description: "An example addon",
   version: "1.0.0",
-  resources: [{ type: "stream", idPrefixes: ["com.resonance.example"] }],
+  resources: [{ type: "stream", idPrefixes: ["net.itsnebula.example"] }],
   handlers: {
     resolveStream: (config, trackId) => {
       // ...
@@ -102,7 +100,45 @@ recordHistory: async (config, trackId, event) => {
 `positionSeconds`, `durationSeconds`, and `completed`. History providers are independently enabled
 with checkboxes; every checked provider receives the listen.
 
-The build script bundles each addon into a self-contained IIFE that sets `globalThis.__resonance_addon__` when executed.
+### Playlist Mutations
+
+Playlist mutation support is split into independent capabilities and handlers:
+
+```ts
+capabilities: {
+  supportsAddToPlaylist: true,
+  supportsCreatePlaylist: true,
+  supportsRemoveFromPlaylist: true,
+},
+handlers: {
+  addToPlaylist: async (config, trackId, playlistId) => {},
+  createPlaylist: async (config, name) => ({
+    id: "provider-local-id",
+    provider: "net.itsnebula.example",
+    title: name,
+    author: null,
+    trackCount: "0 tracks",
+    thumbnailURL: null,
+    canAddTracks: true,
+  }),
+  removeFromPlaylist: async (config, trackId, playlistId) => {},
+}
+```
+
+Return `canAddTracks: false` for read-only playlist summaries. Playlist details should return
+`canEdit: true` only when the authenticated user may remove tracks. Do not advertise a mutation
+capability until its handler succeeds against the provider API.
+
+The suite creates a disposable playlist on Spotify, SoundCloud, Apple Music, and YouTube Music,
+verifies add and remove behavior through the source handlers, and deletes or removes the playlist
+from the account in `finally`.
+
+The build script produces a self-contained `.resonance` package for each addon. Each package is a UTF-8
+JavaScript IIFE with the Resonance format header and sets `globalThis.__resonance_addon__` when executed.
+
+Install a package by choosing it from Resonance Settings, or by opening the `.resonance` file from Files,
+Safari, or AirDrop. Resonance keeps a verified local copy and syncs installed packages privately through
+iCloud.
 
 ## License
 

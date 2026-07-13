@@ -1,8 +1,8 @@
 import { AddonError } from "@resonance-addons/sdk";
 import type { HomeItem, SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem, Track } from "./types";
 
-export const PROVIDER_ID = "com.resonance.soundcloud";
-export const DEFAULT_CLIENT_ID = "Yks9HNwSpw5Bo7goMq3jv8cyDYgoLpZr";
+export const PROVIDER_ID = "net.itsnebula.soundcloud";
+export const DEFAULT_CLIENT_ID = "lmRjTI0FqeXygHMXc3hRzS7hth20PNk5";
 
 const API_BASE = "https://api-v2.soundcloud.com";
 const TRACK_HYDRATE_CHUNK_SIZE = 50;
@@ -19,6 +19,8 @@ export interface SoundCloudCollection<T = any> {
 
 export interface SoundCloudUser {
   id?: number | string;
+  urn?: string | null;
+  analytics_id?: string | null;
   username?: string | null;
   full_name?: string | null;
   description?: string | null;
@@ -44,6 +46,10 @@ export interface SoundCloudTranscoding {
 
 export interface SoundCloudTrack {
   id?: number | string;
+  urn?: string | null;
+  track_authorization?: string | null;
+  policy?: string | null;
+  monetization_model?: string | null;
   kind?: string | null;
   title?: string | null;
   description?: string | null;
@@ -279,7 +285,7 @@ export function userToSearchArtist(user: SoundCloudUser): SearchArtist {
   };
 }
 
-export function playlistToSearchPlaylist(playlist: SoundCloudPlaylist): SearchPlaylist {
+export function playlistToSearchPlaylist(playlist: SoundCloudPlaylist, currentUserId?: string | null): SearchPlaylist {
   return {
     id: String(playlist.id ?? ""),
     provider: PROVIDER_ID,
@@ -290,6 +296,8 @@ export function playlistToSearchPlaylist(playlist: SoundCloudPlaylist): SearchPl
       artworkURL(playlist.artwork_url) ??
       artworkURL(playlist.tracks?.[0]?.artwork_url) ??
       artworkURL(playlist.user?.avatar_url),
+    canAddTracks:
+      currentUserId == null || playlist.user?.id == null ? null : String(playlist.user.id) === currentUserId,
   };
 }
 

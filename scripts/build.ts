@@ -1,11 +1,9 @@
 import { join } from "node:path";
 import { type BunPlugin, Glob } from "bun";
+import { resolveAddons } from "./addons";
 
 const root = join(import.meta.dir, "..");
-
-const defaultAddons = ["ytm-addon", "spotify-addon", "am-addon", "lrclib-addon", "soundcloud-addon", "torbox-addon"];
-const addonArg = process.argv.find((arg) => arg.startsWith("--addon="));
-const addons = addonArg ? [addonArg.split("=")[1]] : defaultAddons;
+const addons = resolveAddons(process.argv);
 
 const workspaceResolver: BunPlugin = {
   name: "workspace-resolver",
@@ -18,11 +16,11 @@ const workspaceResolver: BunPlugin = {
 };
 
 const distDir = `${root}/dist`;
+await Bun.$`rm -rf ${distDir}`;
 await Bun.$`mkdir -p ${distDir}`;
 
 for (const addon of addons) {
-  const name = addon.replace(/-addon$/, "");
-  const entry = `${root}/packages/${addon}/src/index.ts`;
+  const entry = `${root}/packages/${addon.packageName}/src/index.ts`;
 
   const result = await Bun.build({
     entrypoints: [entry],
@@ -30,22 +28,27 @@ for (const addon of addons) {
     target: "browser",
     minify: true,
     plugins: [workspaceResolver],
-    banner: "var self = typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : this);",
+    banner:
+      "// resonance-addon-format: 1\nvar self = typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : this);",
     define: {
       "process.env.NODE_ENV": '"production"',
     },
   });
 
   if (!result.success) {
-    console.error(`Failed to build ${addon}:`);
+    console.error(`Failed to build ${addon.packageName}:`);
     for (const log of result.logs) {
       console.error(log);
     }
     process.exit(1);
   }
 
-  await Bun.write(`${distDir}/${name}.js`, result.outputs[0]);
-  console.log(`Built ${addon} → dist/${name}.js`);
+  const output = result.outputs[0];
+  if (!output) {
+    throw new Error(`${addon.packageName}: build produced no output`);
+  }
+  await Bun.write(`${distDir}/${addon.outputName}.resonance`, output);
+  console.log(`Built ${addon.packageName} → dist/${addon.outputName}.resonance`);
 }
 
 const siteDir = `${root}/public`;

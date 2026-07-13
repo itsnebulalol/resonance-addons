@@ -1,5 +1,6 @@
 import { AddonError } from "@resonance-addons/sdk";
 import {
+  PROVIDER_ID,
   playableTracks,
   resourceToHomeItem,
   type SoundCloudCollection,
@@ -32,7 +33,7 @@ export async function handleHome(config: SoundCloudConfig, continuation?: string
           : [],
         filters: [],
         quickAccess: null,
-        continuation: data.next_href ? { providerID: "com.resonance.soundcloud", token: data.next_href } : null,
+        continuation: data.next_href ? { providerID: PROVIDER_ID, token: data.next_href } : null,
       };
     }
 

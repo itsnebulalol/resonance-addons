@@ -1,12 +1,12 @@
 import { defineAddon } from "@resonance-addons/sdk";
 import { handleLyrics } from "./routes/lyrics";
 
-const PROVIDER_ID = "com.resonance.lrclib";
+const PROVIDER_ID = "net.itsnebula.lrclib";
 
 export const addon = defineAddon({
   id: PROVIDER_ID,
   name: "LRCLIB",
-  description: "Fetch synced and plain lyrics from LRCLIB",
+  description: "Fetch synchronized and plain-text lyrics from LRCLIB",
   version: "1.0.1",
   icon: {
     type: "remote",

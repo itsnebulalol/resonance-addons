@@ -55,6 +55,8 @@ export interface Capabilities {
   supportsSearchSuggestions?: boolean;
   supportsLikeStatus?: boolean;
   supportsAddToPlaylist?: boolean;
+  supportsCreatePlaylist?: boolean;
+  supportsRemoveFromPlaylist?: boolean;
   supportsFilters?: boolean;
   supportsQuickAccess?: boolean;
   supportsRelated?: boolean;
@@ -97,6 +99,8 @@ export interface AddonHandlers<TConfig> {
   setLikeStatus?: (config: TConfig, status: string, videoId: string) => Promise<void>;
   getLikeStatus?: (config: TConfig, videoId: string) => Promise<string>;
   addToPlaylist?: (config: TConfig, trackId: string, playlistId: string) => Promise<void>;
+  createPlaylist?: (config: TConfig, name: string) => Promise<any>;
+  removeFromPlaylist?: (config: TConfig, trackId: string, playlistId: string) => Promise<void>;
   getRelated?: (config: TConfig, browseId: string) => Promise<any[]>;
   getRelatedForTrack?: (config: TConfig, trackId: string) => Promise<any[]>;
   fetchLyrics?: (config: TConfig, title: string, artist: string, videoId: string) => Promise<any | null>;

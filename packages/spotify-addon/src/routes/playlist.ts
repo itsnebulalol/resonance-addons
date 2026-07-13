@@ -77,6 +77,7 @@ export async function handlePlaylist(spDc: string, playlistId: string): Promise<
         thumbnailURL: "https://misc.scdn.co/liked-songs/liked-songs-640.png",
         tracks,
         continuation: tracks.length < totalCount ? String(tracks.length) : null,
+        canEdit: false,
       };
     }
 
@@ -105,6 +106,7 @@ export async function handlePlaylist(spDc: string, playlistId: string): Promise<
       thumbnailURL: bestImageFromSources(flattenImageSources(playlistData?.images?.items)),
       tracks,
       continuation: nextContinuation(playlistData?.content?.totalCount, 0, rawItems.length),
+      canEdit: playlistData?.currentUserCapabilities?.canEditItems === true,
     };
   } catch (e: any) {
     if (e instanceof AddonError) throw e;

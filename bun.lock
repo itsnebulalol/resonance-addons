@@ -11,16 +11,14 @@
         "@biomejs/biome": "^2.4.6",
         "@types/bun": "^1.3.11",
         "@types/node": "^25.5.0",
-      },
-      "peerDependencies": {
         "typescript": "^5",
       },
     },
-    "packages/am-addon": {
-      "name": "@resonance-addons/am-addon",
+    "packages/applemusic-addon": {
+      "name": "@resonance-addons/applemusic-addon",
       "dependencies": {
         "@resonance-addons/sdk": "*",
-        "node-forge": "^1.3.1",
+        "node-forge": "^1.4.0",
       },
     },
     "packages/lrclib-addon": {
@@ -50,14 +48,8 @@
         "@types/node-forge": "^1.3.11",
       },
     },
-    "packages/torbox-addon": {
-      "name": "@resonance-addons/torbox-addon",
-      "dependencies": {
-        "@resonance-addons/sdk": "*",
-      },
-    },
-    "packages/ytm-addon": {
-      "name": "@resonance-addons/ytm-addon",
+    "packages/youtubemusic-addon": {
+      "name": "@resonance-addons/youtubemusic-addon",
       "dependencies": {
         "@resonance-addons/sdk": "*",
       },
@@ -84,7 +76,7 @@
 
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
 
-    "@resonance-addons/am-addon": ["@resonance-addons/am-addon@workspace:packages/am-addon"],
+    "@resonance-addons/applemusic-addon": ["@resonance-addons/applemusic-addon@workspace:packages/applemusic-addon"],
 
     "@resonance-addons/lrclib-addon": ["@resonance-addons/lrclib-addon@workspace:packages/lrclib-addon"],
 
@@ -94,9 +86,7 @@
 
     "@resonance-addons/spotify-addon": ["@resonance-addons/spotify-addon@workspace:packages/spotify-addon"],
 
-    "@resonance-addons/torbox-addon": ["@resonance-addons/torbox-addon@workspace:packages/torbox-addon"],
-
-    "@resonance-addons/ytm-addon": ["@resonance-addons/ytm-addon@workspace:packages/ytm-addon"],
+    "@resonance-addons/youtubemusic-addon": ["@resonance-addons/youtubemusic-addon@workspace:packages/youtubemusic-addon"],
 
     "@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 

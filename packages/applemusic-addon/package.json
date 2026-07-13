@@ -1,0 +1,13 @@
+{
+  "name": "@resonance-addons/applemusic-addon",
+  "module": "src/index.ts",
+  "scripts": {
+    "build": "bun ../../scripts/build.ts --addon=applemusic-addon"
+  },
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@resonance-addons/sdk": "*",
+    "node-forge": "^1.4.0"
+  }
+}

@@ -2,8 +2,7 @@
   "name": "@resonance-addons/soundcloud-addon",
   "module": "src/index.ts",
   "scripts": {
-    "build": "bun ../../scripts/build.ts --addon=soundcloud-addon",
-    "test:live": "bun ../../scripts/build.ts --addon=soundcloud-addon && bun test/run.ts"
+    "build": "bun ../../scripts/build.ts --addon=soundcloud-addon"
   },
   "type": "module",
   "private": true,

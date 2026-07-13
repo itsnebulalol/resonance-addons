@@ -4,6 +4,7 @@ import {
   isAlbumSet,
   PROVIDER_ID,
   playableTracks,
+  playlistToSearchPlaylist,
   resourceToHomeItem,
   type SoundCloudCollection,
   type SoundCloudConfig,
@@ -47,9 +48,11 @@ async function handleAuthenticatedLibrary(
   type?: string,
   continuation?: string,
 ): Promise<CatalogPage> {
+  const user = await scFetch<SoundCloudUser>(config, "/me");
+  const currentUserId = user.id == null ? null : String(user.id);
   if (type) {
     const normalized = normalizeType(type, true);
-    const section = await loadAuthenticatedSection(config, normalized, continuation);
+    const section = await loadAuthenticatedSection(config, normalized, continuation, currentUserId);
     return {
       sections: section.items.length ? [section] : [],
       filters: makeFilters(filterKeyFor(normalized), true),
@@ -60,7 +63,7 @@ async function handleAuthenticatedLibrary(
 
   const results = await Promise.allSettled(
     (["likes", "recent", "tracks", "playlists", "albums", "artists"] as LibraryType[]).map((libraryType) =>
-      loadAuthenticatedSection(config, libraryType),
+      loadAuthenticatedSection(config, libraryType, undefined, currentUserId),
     ),
   );
   const sections = results
@@ -76,10 +79,11 @@ async function loadPublicSection(
   source: string,
   type: LibraryType,
   continuation?: string,
+  currentUserId?: string | null,
 ): Promise<HomeSection> {
   const endpoint = endpointFor(source, type);
   const data = await fetchCollection(config, endpoint, continuation);
-  const items = mapLibraryItems(type, data.collection ?? []);
+  const items = mapLibraryItems(type, data.collection ?? [], currentUserId);
   return makeSection(type, items, data.next_href);
 }
 
@@ -87,11 +91,12 @@ async function loadAuthenticatedSection(
   config: SoundCloudConfig,
   type: LibraryType,
   continuation?: string,
+  currentUserId?: string | null,
 ): Promise<HomeSection> {
   if (type === "likes") {
     const source = await authenticatedUserSource(config);
     if (!source) return makeSection(type, [], null);
-    return loadPublicSection(config, source, type, continuation);
+    return loadPublicSection(config, source, type, continuation, currentUserId);
   }
 
   if (type === "recent") {
@@ -101,24 +106,24 @@ async function loadAuthenticatedSection(
       continuation,
       25,
     );
-    const items = mapLibraryItems("likes", data.collection ?? []);
+    const items = mapLibraryItems("likes", data.collection ?? [], currentUserId);
     return makeSection(type, items, data.next_href);
   }
 
   if (type === "tracks") {
     const source = await authenticatedUserSource(config);
     if (!source) return makeSection(type, [], null);
-    return loadPublicSection(config, source, type, continuation);
+    return loadPublicSection(config, source, type, continuation, currentUserId);
   }
 
   if (type === "artists") {
     const source = await authenticatedUserSource(config);
     if (!source) return makeSection(type, [], null);
-    return loadPublicSection(config, source, type, continuation);
+    return loadPublicSection(config, source, type, continuation, currentUserId);
   }
 
   const data = await fetchCollection(config, "/me/library/all", continuation, 50);
-  const items = mapLibraryItems(type, data.collection ?? []);
+  const items = mapLibraryItems(type, data.collection ?? [], currentUserId);
   return makeSection(type, items, data.next_href);
 }
 
@@ -140,13 +145,20 @@ function endpointFor(source: string, type: LibraryType): string {
   return `/${source}/playlists`;
 }
 
-function mapLibraryItems(type: LibraryType, collection: any[]): HomeItem[] {
+function mapLibraryItems(type: LibraryType, collection: any[], currentUserId?: string | null): HomeItem[] {
   if (type === "albums" || type === "playlists") {
     return collection
       .map((item) => item?.playlist ?? item)
       .filter((item) => item?.kind === "playlist")
       .filter((playlist: SoundCloudPlaylist) => (type === "albums" ? isAlbumSet(playlist) : !isAlbumSet(playlist)))
-      .map((item) => resourceToHomeItem(item))
+      .map((item) =>
+        type === "playlists"
+          ? {
+              type: "playlist" as const,
+              playlist: playlistToSearchPlaylist(item, currentUserId),
+            }
+          : resourceToHomeItem(item),
+      )
       .filter((item): item is HomeItem => Boolean(item));
   }
 

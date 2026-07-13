@@ -47,6 +47,7 @@ export interface SearchPlaylist {
   author: string | null;
   trackCount: string | null;
   thumbnailURL: string | null;
+  canAddTracks?: boolean | null;
 }
 
 export type HomeItem =
@@ -120,6 +121,7 @@ export interface PlaylistDetail {
   thumbnailURL: string | null;
   tracks: Track[];
   continuation: string | null;
+  canEdit?: boolean | null;
 }
 
 export interface ArtistDetail {

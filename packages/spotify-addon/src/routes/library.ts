@@ -73,6 +73,7 @@ function playlistItem(entry: any): HomeItem | null {
     author: playlistData?.ownerV2?.data?.name ?? null,
     trackCount: null,
     thumbnailURL: bestImageFromSources(flattenImageSources(playlistData?.images?.items)),
+    canAddTracks: playlistData?.currentUserCapabilities?.canEditItems === true,
   };
 
   return {

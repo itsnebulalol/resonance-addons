@@ -1,7 +1,7 @@
 import { type PathfinderOperation, pathfinderRequest } from "./auth";
 import type { ArtistRef, Track } from "./types";
 
-export const PROVIDER_ID = "com.resonance.spotify";
+export const PROVIDER_ID = "net.itsnebula.spotify";
 
 export const OperationHash = {
   profileAttributes: "53bcb064f6cd18c23f752bc324a791194d20df612d8e1239c735144ab0399ced",
@@ -19,6 +19,7 @@ export const OperationHash = {
   homeSection: "c11ff5d8f508cb1a3dad3f15ee80611cda7df7e6fb45212e466fb3e84a680bf9",
   home: "eb3fba2d388cf4fc4d696b1757a58584e9538a3b515ea742e9cc9465807340be",
   searchSuggestions: "556f5a15b2fdd3a7113ffd377ad9805e38a3a27b8bb1ca7d6d76bad54aa8ee12",
+  playlistMutation: "47b2a1234b17748d332dd0431534f22450e9ecbb3d5ddcdacbd83368636a0990",
 };
 
 export function uriToId(uri: string): string {

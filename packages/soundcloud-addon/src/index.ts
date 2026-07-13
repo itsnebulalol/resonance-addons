@@ -5,7 +5,13 @@ import { handleAlbum, handleArtist, handlePlaylist, handlePlaylistMore } from ".
 import { handleHistory } from "./routes/history";
 import { handleLibrary } from "./routes/library";
 import { handleMetadata } from "./routes/metadata";
-import { handleGetLikeStatus, handleLike } from "./routes/mutations";
+import {
+  handleAddToPlaylist,
+  handleCreatePlaylist,
+  handleGetLikeStatus,
+  handleLike,
+  handleRemoveFromPlaylist,
+} from "./routes/mutations";
 import { handleQueueMore, handleQueueStart } from "./routes/queue";
 import { handleRelated, handleRelatedForTrack } from "./routes/related";
 import { handleSearch, handleSearchSuggestions } from "./routes/search";
@@ -14,8 +20,8 @@ import { handleStream } from "./routes/stream";
 export const addon = defineAddon<SoundCloudConfig>({
   id: PROVIDER_ID,
   name: "SoundCloud",
-  description: "Search, stream, browse, and sync SoundCloud tracks, profiles, albums, playlists, and history",
-  version: "1.1.0",
+  description: "Stream, browse, search, manage your library, and sync listening history with SoundCloud",
+  version: "2.0.0",
   icon: {
     type: "remote",
     value: "https://cdn-icons-png.flaticon.com/512/48/48967.png",
@@ -34,12 +40,12 @@ export const addon = defineAddon<SoundCloudConfig>({
   ],
   auth: {
     type: "token",
-    label: "Optional: enter your SoundCloud oauth_token cookie for library, likes, and history.",
+    label: "Enter your SoundCloud oauth_token cookie to enable library, likes, and history. This field is optional.",
     fields: [
       {
         key: "oauthToken",
         type: "password",
-        title: "SoundCloud OAuth Token",
+        title: "SoundCloud oauth_token Cookie",
         placeholder: "Paste the oauth_token cookie value",
         isRequired: false,
       },
@@ -70,6 +76,11 @@ export const addon = defineAddon<SoundCloudConfig>({
     setLikeStatus: (config: SoundCloudConfig, status: string, trackId: string) =>
       handleLike(config, status as "liked" | "disliked" | "none", trackId).then(() => {}),
     getLikeStatus: (config: SoundCloudConfig, trackId: string) => handleGetLikeStatus(config, trackId),
+    addToPlaylist: (config: SoundCloudConfig, trackId: string, playlistId: string) =>
+      handleAddToPlaylist(config, trackId, playlistId),
+    createPlaylist: (config: SoundCloudConfig, name: string) => handleCreatePlaylist(config, name),
+    removeFromPlaylist: (config: SoundCloudConfig, trackId: string, playlistId: string) =>
+      handleRemoveFromPlaylist(config, trackId, playlistId),
     fetchMetadata: (
       config: SoundCloudConfig,
       title?: string,
@@ -84,7 +95,9 @@ export const addon = defineAddon<SoundCloudConfig>({
     supportsContinuation: true,
     supportsSearchSuggestions: true,
     supportsLikeStatus: true,
-    supportsAddToPlaylist: false,
+    supportsAddToPlaylist: true,
+    supportsCreatePlaylist: true,
+    supportsRemoveFromPlaylist: true,
     supportsFilters: true,
     supportsQuickAccess: false,
     supportsRelated: true,

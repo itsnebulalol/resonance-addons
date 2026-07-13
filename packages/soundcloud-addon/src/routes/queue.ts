@@ -1,6 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
 import {
   fetchTrack,
+  PROVIDER_ID,
   playableTracks,
   resourceToHomeItem,
   type SoundCloudCollection,
@@ -57,7 +58,7 @@ export async function handleQueueStart(config: SoundCloudConfig, trackId: string
     const likeStatus = await handleGetLikeStatus(config, trackId).catch(() => null);
     return {
       tracks,
-      continuation: continuationToken ? { providerID: "com.resonance.soundcloud", token: continuationToken } : null,
+      continuation: continuationToken ? { providerID: PROVIDER_ID, token: continuationToken } : null,
       actions: [],
       title,
       likeStatus,
@@ -80,7 +81,7 @@ export async function handleQueueMore(config: SoundCloudConfig, token: string): 
 
     return {
       tracks,
-      continuation: data.next_href ? { providerID: "com.resonance.soundcloud", token: data.next_href } : null,
+      continuation: data.next_href ? { providerID: PROVIDER_ID, token: data.next_href } : null,
       actions: [],
       title: null,
       likeStatus: null,

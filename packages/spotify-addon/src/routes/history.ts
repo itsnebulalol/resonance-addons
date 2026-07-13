@@ -28,7 +28,8 @@ export async function handleHistory(spDc: string, trackId: string, event: Histor
       throw new AddonError(`Spotify media metadata failed (${mediaResponse.status})`, mediaResponse.status);
     }
     const media: any = await mediaResponse.json();
-    const item = media?.media?.[uri]?.item ?? Object.values(media?.media ?? {})[0]?.item;
+    const mediaItems = Object.values(media?.media ?? {}) as Array<{ item?: any }>;
+    const item = media?.media?.[uri]?.item ?? mediaItems[0]?.item;
     const file = [...(item?.manifest?.file_ids_mp4 ?? []), ...(item?.manifest?.file_ids_mp4_dual ?? [])].sort(
       (a: any, b: any) => (b.bitrate ?? 0) - (a.bitrate ?? 0),
     )[0];

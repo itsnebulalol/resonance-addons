@@ -80,10 +80,6 @@
         .card-info { display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
         .card-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
         .card-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
-        .version { 
-            font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 100px; 
-            background: rgba(255,255,255,0.05); color: var(--text-muted); font-family: monospace;
-        }
         .card-desc { color: var(--text-muted); font-size: 1rem; font-weight: 300; }
 
         .btn {
@@ -112,15 +108,6 @@
         footer a { color: var(--text); text-decoration: none; transition: color 0.2s; }
         footer a:hover { color: var(--accent, #fff); }
 
-        .toast {
-            position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px);
-            background: var(--text); color: var(--bg); padding: 0.75rem 1.5rem;
-            border-radius: 100px; font-weight: 500; font-size: 0.875rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100;
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .toast.show { transform: translateX(-50%) translateY(0); }
-
         @keyframes fadeUp {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -142,13 +129,12 @@
                     <div class="card-info">
                         <div class="card-header">
                             <h2 class="card-title">YouTube Music</h2>
-                            <!-- <span class="version">v1.0.0</span> -->
                         </div>
-                        <p class="card-desc">Stream, browse, and sync listening history</p>
+                        <p class="card-desc">Stream, browse, search, manage your library, and sync listening history with YouTube Music</p>
                     </div>
                     <div class="card-actions">
-                        <button type="button" class="btn copy-btn" data-url="/ytm.js">Copy URL</button>
-                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Fytm.js" class="btn btn-primary">Install</a>
+                        <a href="/youtubemusic.resonance" download class="btn">Download</a>
+                        <button type="button" class="btn btn-primary install-btn" data-addon="/youtubemusic.resonance">Install</button>
                     </div>
                 </div>
             </div>
@@ -159,13 +145,12 @@
                     <div class="card-info">
                         <div class="card-header">
                             <h2 class="card-title">Spotify</h2>
-                            <!-- <span class="version">v2.0.1</span> -->
                         </div>
-                        <p class="card-desc">Stream, browse, manage your library, and sync listening history</p>
+                        <p class="card-desc">Stream, browse, search, manage your library, and sync listening history with Spotify</p>
                     </div>
                     <div class="card-actions">
-                        <button type="button" class="btn copy-btn" data-url="/spotify.js">Copy URL</button>
-                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Fspotify.js" class="btn btn-primary">Install</a>
+                        <a href="/spotify.resonance" download class="btn">Download</a>
+                        <button type="button" class="btn btn-primary install-btn" data-addon="/spotify.resonance">Install</button>
                     </div>
                 </div>
             </div>
@@ -176,13 +161,12 @@
                     <div class="card-info">
                         <div class="card-header">
                             <h2 class="card-title">Apple Music</h2>
-                            <!-- <span class="version">v1.2.1</span> -->
                         </div>
-                        <p class="card-desc">Stream, browse, and sync playback, history, lyrics &amp; metadata</p>
+                        <p class="card-desc">Stream, browse, search, manage your library, and sync listening history with Apple Music</p>
                     </div>
                     <div class="card-actions">
-                        <button type="button" class="btn copy-btn" data-url="/am.js">Copy URL</button>
-                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Fam.js" class="btn btn-primary">Install</a>
+                        <a href="/applemusic.resonance" download class="btn">Download</a>
+                        <button type="button" class="btn btn-primary install-btn" data-addon="/applemusic.resonance">Install</button>
                     </div>
                 </div>
             </div>
@@ -193,13 +177,12 @@
                     <div class="card-info">
                         <div class="card-header">
                             <h2 class="card-title">LRCLIB</h2>
-                            <!-- <span class="version">v1.0.0</span> -->
                         </div>
-                        <p class="card-desc">Fetch synced and plain lyrics from LRCLIB</p>
+                        <p class="card-desc">Fetch synchronized and plain-text lyrics from LRCLIB</p>
                     </div>
                     <div class="card-actions">
-                        <button type="button" class="btn copy-btn" data-url="/lrclib.js">Copy URL</button>
-                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Flrclib.js" class="btn btn-primary">Install</a>
+                        <a href="/lrclib.resonance" download class="btn">Download</a>
+                        <button type="button" class="btn btn-primary install-btn" data-addon="/lrclib.resonance">Install</button>
                     </div>
                 </div>
             </div>
@@ -210,33 +193,16 @@
                     <div class="card-info">
                         <div class="card-header">
                             <h2 class="card-title">SoundCloud</h2>
-                            <!-- <span class="version">v1.0.0</span> -->
                         </div>
-                        <p class="card-desc">Search, stream, browse, and sync tracks, profiles, albums, playlists, and history</p>
+                        <p class="card-desc">Stream, browse, search, manage your library, and sync listening history with SoundCloud</p>
                     </div>
                     <div class="card-actions">
-                        <button type="button" class="btn copy-btn" data-url="/soundcloud.js">Copy URL</button>
-                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Fsoundcloud.js" class="btn btn-primary">Install</a>
+                        <a href="/soundcloud.resonance" download class="btn">Download</a>
+                        <button type="button" class="btn btn-primary install-btn" data-addon="/soundcloud.resonance">Install</button>
                     </div>
                 </div>
             </div>
 
-            <!-- TorBox -->
-            <div class="addon-card" style="--accent: #8b5cf6;">
-                <div class="card-content">
-                    <div class="card-info">
-                        <div class="card-header">
-                            <h2 class="card-title">TorBox</h2>
-                            <!-- <span class="version">v1.0.0</span> -->
-                        </div>
-                        <p class="card-desc">Stream music from cached torrents via TorBox</p>
-                    </div>
-                    <div class="card-actions">
-                        <button type="button" class="btn copy-btn" data-url="/torbox.js">Copy URL</button>
-                        <a href="resonance://install-addon?url=https%3A%2F%2Fresonance.itsnebula.net%2Ftorbox.js" class="btn btn-primary">Install</a>
-                    </div>
-                </div>
-            </div>
         </main>
 
         <footer>
@@ -244,8 +210,6 @@
             <a href="https://github.com/itsnebulalol/resonance-addons" target="_blank" rel="noopener noreferrer">GitHub Repository ↗</a>
         </footer>
     </div>
-
-    <div class="toast" id="toast">URL copied to clipboard</div>
 
     <script>
         document.querySelectorAll('.addon-card').forEach(card => {
@@ -273,42 +237,15 @@
             observer.observe(card);
         });
 
-        const toast = document.getElementById('toast');
-        let toastTimeout;
-
-        document.querySelectorAll('.copy-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const path = e.target.getAttribute('data-url');
-                const baseUrl = window.location.protocol === 'file:' ? 'https://resonance.itsnebula.net' : window.location.origin;
-                const fullUrl = baseUrl + path;
-                
-                try {
-                    await navigator.clipboard.writeText(fullUrl);
-                    showToast('URL copied to clipboard');
-                } catch {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = fullUrl;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    try {
-                        document.execCommand('copy');
-                        showToast('URL copied to clipboard');
-                    } catch {
-                        showToast('Failed to copy URL');
-                    }
-                    document.body.removeChild(textArea);
-                }
+        document.querySelectorAll('.install-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const path = button.getAttribute('data-addon');
+                if (!path) return;
+                const packageURL = new URL(path, window.location.href).href;
+                window.location.href = `resonance://install-addon?url=${encodeURIComponent(packageURL)}`;
             });
         });
 
-        function showToast(message) {
-            toast.textContent = message;
-            toast.classList.add('show');
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                toast.classList.remove('show');
-            }, 2500);
-        }
     </script>
 </body>
 </html>

@@ -4,6 +4,7 @@ import {
   countText,
   fetchPlaylist,
   fetchUser,
+  hasOAuth,
   hydrateTracks,
   isAlbumSet,
   msToDuration,
@@ -58,7 +59,10 @@ export async function handleAlbum(config: SoundCloudConfig, playlistId: string):
 
 export async function handlePlaylist(config: SoundCloudConfig, playlistId: string): Promise<PlaylistDetail> {
   try {
-    const playlist = await fetchPlaylist(config, playlistId);
+    const [playlist, currentUser] = await Promise.all([
+      fetchPlaylist(config, playlistId),
+      hasOAuth(config) ? scFetch<SoundCloudUser>(config, "/me") : Promise.resolve(null),
+    ]);
     const tracks = (await playlistTracks(config, playlist)).filter((track) => track.id);
     return {
       id: String(playlist.id ?? playlistId),
@@ -72,6 +76,8 @@ export async function handlePlaylist(config: SoundCloudConfig, playlistId: strin
         artworkURL(playlist.user?.avatar_url),
       tracks,
       continuation: null,
+      canEdit:
+        currentUser?.id != null && playlist.user?.id != null && String(currentUser.id) === String(playlist.user.id),
     };
   } catch (error: any) {
     console.error("[soundcloud:detail] Playlist error:", error.message);

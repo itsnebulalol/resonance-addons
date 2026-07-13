@@ -5,6 +5,10 @@
     "module": "Preserve",
     "moduleDetection": "force",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@resonance-addons/sdk": ["packages/sdk/src/index.ts"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
