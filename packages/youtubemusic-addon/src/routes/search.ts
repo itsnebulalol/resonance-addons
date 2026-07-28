@@ -1,5 +1,6 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
+import { parseTrackMetadata } from "../track-metadata";
 import type { SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem, Track, YouTubeMusicConfig } from "../types";
 import { bestThumbnail, PROVIDER_ID } from "../utils";
 
@@ -135,6 +136,7 @@ function parseClassicSearchItem(item: any): SearchResultItem | null {
       durationSeconds: duration ? parseDurationSeconds(duration) : null,
       thumbnailURL,
       isExplicit: false,
+      ...parseTrackMetadata(item),
     };
     return { type: "track", track };
   }
@@ -215,6 +217,7 @@ function parseIOSSearchItem(item: any): SearchResultItem | null {
       durationSeconds: null,
       thumbnailURL,
       isExplicit: false,
+      ...parseTrackMetadata(data),
     };
     return { type: "track", track };
   }

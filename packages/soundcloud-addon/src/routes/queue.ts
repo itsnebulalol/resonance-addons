@@ -30,7 +30,7 @@ export async function handleQueueStart(config: SoundCloudConfig, trackId: string
         playlistId = album.playlistId;
       } else {
         const playlist = await handlePlaylist(config, ctx.id);
-        tracks = playlist.tracks;
+        tracks = playlist.entries.map((entry) => entry.track);
         title = playlist.title;
         playlistId = playlist.id;
       }

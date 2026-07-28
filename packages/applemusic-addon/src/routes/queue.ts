@@ -1,5 +1,6 @@
+import { AddonError } from "@resonance-addons/sdk";
 import { ampGet, getStorefront, PROVIDER_ID, radioNextTracks, songStationId, songToTrack } from "../api";
-import type { QueuePage, Track } from "../models";
+import type { QueuePage, Station, Track } from "../models";
 import { handleAlbum, handlePlaylist } from "./detail";
 import { handleGetLikeStatus } from "./mutations";
 
@@ -43,7 +44,7 @@ export async function handleQueueStart(trackId: string, context?: any): Promise<
       title = a.title;
     } else if (ctx?.type === "playlist" && ctx.id) {
       const p = await handlePlaylist(ctx.id);
-      tracks = p.tracks;
+      tracks = p.entries.map((entry) => entry.track);
       title = p.title;
       playlistId = ctx.id;
     }
@@ -63,7 +64,7 @@ export async function handleQueueStart(trackId: string, context?: any): Promise<
     if (radio.length === 0 && artistId) {
       try {
         const d = await ampGet(`/v1/catalog/${sf}/artists/${artistId}/view/top-songs`, { limit: 25 });
-        radio = (d?.data ?? []).map(songToTrack).filter((t: Track) => t.id !== trackId);
+        radio = (d?.data ?? []).map((song: any) => songToTrack(song)).filter((t: Track) => t.id !== trackId);
       } catch (e: any) {
         console.error("[queue] radio fallback failed:", e.message);
       }
@@ -87,5 +88,21 @@ export async function handleQueueMore(token: string): Promise<QueuePage> {
     actions: [],
     title: null,
     likeStatus: null,
+  };
+}
+
+export async function handleStationStart(station: Station): Promise<QueuePage> {
+  const tracks = await radioNextTracks(station.id, 10);
+  if (tracks.length === 0) {
+    throw new AddonError("Station returned no tracks", 404);
+  }
+  return {
+    tracks,
+    continuation: { providerID: PROVIDER_ID, token: station.id },
+    actions: [],
+    title: station.title,
+    likeStatus: null,
+    playlistId: null,
+    relatedBrowseId: station.id,
   };
 }

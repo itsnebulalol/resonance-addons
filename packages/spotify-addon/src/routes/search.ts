@@ -1,6 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
+import { transformGraphQLTrackItem } from "../track-mapping";
 import type { SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem } from "../types";
-import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, transformGraphQLTrack, uriToId } from "../utils";
+import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, uriToId } from "../utils";
 
 interface SearchResponse {
   searchV2?: {
@@ -13,6 +14,23 @@ interface SearchResponse {
       }>;
     };
   };
+}
+
+export function preferExplicit(items: SearchResultItem[]): SearchResultItem[] {
+  const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, " ").trim();
+  const trackKey = (track: { title: string; artists: Array<{ name: string }> }) =>
+    `${normalize(track.title)}\0${normalize(track.artists[0]?.name ?? "")}`;
+  const explicitTracks = new Set<string>();
+
+  for (const item of items) {
+    if (item.type === "track" && item.track.isExplicit) {
+      explicitTracks.add(trackKey(item.track));
+    }
+  }
+
+  return items.filter(
+    (item) => !(item.type === "track" && !item.track.isExplicit && explicitTracks.has(trackKey(item.track))),
+  );
 }
 
 function albumItem(data: any): SearchResultItem {
@@ -69,8 +87,10 @@ function searchItem(wrapper: { __typename?: string; data?: any } | undefined): S
   if (!data?.uri) return null;
 
   switch (wrapper?.__typename) {
-    case "TrackResponseWrapper":
-      return { type: "track", track: transformGraphQLTrack(data) };
+    case "TrackResponseWrapper": {
+      const track = transformGraphQLTrackItem(data);
+      return track ? { type: "track", track } : null;
+    }
     case "AlbumResponseWrapper":
       return albumItem(data);
     case "ArtistResponseWrapper":
@@ -100,6 +120,7 @@ export async function handleSearch(spDc: string, query: string, filter?: string)
     const items = (data?.searchV2?.topResultsV2?.itemsV2 ?? [])
       .map((hit) => searchItem(hit.item))
       .filter((item): item is SearchResultItem => item !== null);
+    const preferredItems = preferExplicit(items);
 
     const typeForFilter: Record<string, SearchResultItem["type"]> = {
       songs: "track",
@@ -108,7 +129,7 @@ export async function handleSearch(spDc: string, query: string, filter?: string)
       playlists: "playlist",
     };
     const type = filter ? typeForFilter[filter] : undefined;
-    return type ? items.filter((item) => item.type === type) : items;
+    return type ? preferredItems.filter((item) => item.type === type) : preferredItems;
   } catch (e: any) {
     if (e instanceof AddonError) throw e;
     throw new AddonError(e?.message ?? "Failed to search", 500);

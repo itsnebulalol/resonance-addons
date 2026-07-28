@@ -20,6 +20,16 @@ export interface Track {
   durationSeconds: number | null;
   thumbnailURL: string | null;
   isExplicit: boolean;
+  isEphemeral?: boolean | null;
+  genres?: string[] | null;
+  releaseYear?: number | null;
+  albumArtists?: ArtistRef[] | null;
+  trackNumber?: number | null;
+  trackTotal?: number | null;
+  discNumber?: number | null;
+  discTotal?: number | null;
+  bpm?: number | null;
+  musicalKey?: string | null;
 }
 
 export interface SearchAlbum {
@@ -48,10 +58,20 @@ export interface SearchPlaylist {
   trackCount: string | null;
   thumbnailURL: string | null;
   canAddTracks?: boolean | null;
+  canDelete?: boolean | null;
+}
+
+export interface Station {
+  id: string;
+  provider: string;
+  title: string;
+  subtitle: string | null;
+  thumbnailURL: string | null;
 }
 
 export type HomeItem =
   | { type: "track"; track: Track; playlistId?: string }
+  | { type: "station"; station: Station }
   | { type: "album"; album: SearchAlbum }
   | { type: "playlist"; playlist: SearchPlaylist }
   | { type: "artist"; artist: SearchArtist };
@@ -87,6 +107,10 @@ export interface QueueAction {
   id: string;
   title: string;
   isSelected: boolean;
+  allowsPrefetch?: boolean;
+  isMomentary?: boolean;
+  shouldAdvancePlayback?: boolean;
+  isStationRetrigger?: boolean;
   payload: { providerID: string; data: Record<string, string> };
 }
 
@@ -98,6 +122,30 @@ export interface QueuePage {
   likeStatus: "liked" | "disliked" | "none" | null;
   playlistId?: string | null;
   relatedBrowseId?: string | null;
+  djScript?: DJScript | null;
+}
+
+export interface DJScript {
+  slots: DJScriptSlot[];
+}
+
+export interface DJScriptSlot {
+  trackId: string;
+  text?: string | null;
+  audio?: DJAudioPayload | null;
+  presentation?: DJNarrationPresentation | null;
+  position: "beforeTrack" | "afterTrack";
+}
+
+export interface DJAudioPayload {
+  data: string;
+  contentType: string;
+}
+
+export interface DJNarrationPresentation {
+  title?: string | null;
+  artist?: string | null;
+  artworkURL?: string | null;
 }
 
 export interface AlbumDetail {
@@ -119,9 +167,10 @@ export interface PlaylistDetail {
   description: string | null;
   trackCount: string | null;
   thumbnailURL: string | null;
-  tracks: Track[];
+  entries: PlaylistEntry[];
   continuation: string | null;
-  canEdit?: boolean | null;
+  revision: string | null;
+  editCapabilities: PlaylistEditCapabilities;
 }
 
 export interface ArtistDetail {
@@ -136,8 +185,33 @@ export interface ArtistDetail {
   relatedArtists: SearchArtist[];
 }
 
-export interface TrackPage {
-  tracks: Track[];
+export interface PlaylistEntry {
+  id: string;
+  track: Track;
+}
+
+export interface PlaylistEditCapabilities {
+  canRename: boolean;
+  canChangeArtwork: boolean;
+  canReorder: boolean;
+  canRemoveItems: boolean;
+}
+
+export interface PlaylistArtworkUpdate {
+  data: string;
+  mimeType: string;
+}
+
+export interface PlaylistUpdateRequest {
+  playlistID: string;
+  name: string;
+  entries: PlaylistEntry[];
+  revision: string | null;
+  artwork: PlaylistArtworkUpdate | null;
+}
+
+export interface PlaylistEntryPage {
+  entries: PlaylistEntry[];
   continuation: string | null;
 }
 
@@ -184,6 +258,14 @@ export interface SpotifyTrack {
   duration_ms: number;
   explicit: boolean;
   track_number?: number;
+  disc_number?: number;
+}
+
+export interface SpotifyAudioFeatures {
+  id: string;
+  tempo?: number;
+  key?: number;
+  mode?: number;
 }
 
 export interface SpotifyPlaylist {

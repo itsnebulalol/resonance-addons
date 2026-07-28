@@ -14,6 +14,10 @@ All addons are available on the [Resonance Addons homepage](https://resonance.it
 | **LRCLIB** | Fetch synchronized and plain-text lyrics from LRCLIB |
 | **SoundCloud** | Stream, browse, search, manage your library, and sync listening history with SoundCloud |
 
+Spotify and Apple Music use separate self-hosted streaming servers. The addon bundles keep catalog,
+library, search, and mutation requests on-device, while their Docker backends handle provider media
+acquisition and decryption. They are currently private.
+
 ## Development
 
 Requires [Bun](https://bun.sh).
@@ -56,6 +60,7 @@ packages/
   soundcloud-addon/     SoundCloud addon
 public/
   index.html            Static homepage
+servers/                Private submodule containing Apple Music and Spotify servers
 scripts/
   addons.ts             Canonical addon metadata and build list
   build.ts              Builds all addons using Bun.build()

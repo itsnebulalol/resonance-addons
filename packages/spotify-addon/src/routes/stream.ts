@@ -1,130 +1,254 @@
-import { getAccessToken, getClientToken } from "../auth";
-import { psshInitData, WidevineCDM } from "../widevine";
+import type {
+  ReadyStream,
+  StreamCodec,
+  StreamContainer,
+  StreamControlRequest,
+  StreamDescriptor,
+  StreamPartialPersistence,
+  StreamPreparation,
+  StreamRangeSupport,
+  StreamSeekMode,
+  StreamTransport,
+} from "@resonance-addons/sdk";
+import { getAccessToken } from "../auth";
 
-const APP_VERSION = "1.2.80.313.gd1726b65";
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
-const SPCLIENT = "https://spclient.wg.spotify.com";
+export type SpotifyStreamDescriptor = StreamDescriptor;
 
-export interface SpotifyStreamResult {
+export interface BackendStreamResponse {
+  state: "ready" | "preparing";
   url: string;
   bitrate: number | null;
   durationSeconds: number | null;
-  format: string | null;
-  keyId: string; // hex
-  key: string; // hex AES-128 content key
+  format: string;
+  contentLength: number | null;
+  bitDepth: number | null;
+  transport: Exclude<StreamTransport, "localFile">;
+  rangeSupport: StreamRangeSupport;
+  seekMode: StreamSeekMode;
+  cacheIdentity: string;
+  partialPersistence: StreamPartialPersistence;
+  preparation: {
+    id: string;
+    statusRequest: StreamControlRequest;
+    cancelRequest: StreamControlRequest;
+    refreshRequest: StreamControlRequest | null;
+  };
+  pollAfterMilliseconds: number | null;
 }
 
-function authHeaders(token: string, clientToken: string, extra: Record<string, string> = {}) {
-  return {
-    Authorization: `Bearer ${token}`,
-    "client-token": clientToken,
-    "app-platform": "WebPlayer",
-    "spotify-app-version": APP_VERSION,
-    "User-Agent": UA,
-    Origin: "https://open.spotify.com",
-    ...extra,
+interface BackendStatusResponse {
+  lifecycle?: {
+    ready?: boolean;
+    state?: string;
+    error?: string | null;
   };
 }
 
-async function getJson(url: string, headers: Record<string, string>): Promise<any> {
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`GET ${url.split("?")[0]} HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  return res.json();
+function serverEndpoint(serverUrl: string): URL {
+  const value = serverUrl.trim();
+  if (!value) throw new Error("Spotify streaming server URL is not configured");
+  const base = new URL(value.endsWith("/") ? value : `${value}/`);
+  if (base.protocol !== "http:" && base.protocol !== "https:") {
+    throw new Error("Spotify streaming server URL must use HTTP or HTTPS");
+  }
+  return new URL("v1/resolve", base.href);
 }
 
-async function getBuffer(url: string, headers: Record<string, string>): Promise<Buffer> {
-  const res = await fetch(url, { headers });
-  return Buffer.from(await res.arrayBuffer());
+function resolvedMediaURL(serverUrl: string, returnedURL: string): string {
+  const base = new URL(serverUrl.trim().endsWith("/") ? serverUrl.trim() : `${serverUrl.trim()}/`);
+  return new URL(returnedURL.replace(/^\/+/, ""), base.href).href;
 }
 
-const wvdCache = new Map<string, Promise<Buffer>>();
-function loadWvd(wvdUrl: string): Promise<Buffer> {
-  let p = wvdCache.get(wvdUrl);
-  if (!p) {
-    p = getBuffer(wvdUrl, { "User-Agent": UA }).then((wvd) => {
-      if (!(wvd[0] === 0x57 && wvd[1] === 0x56 && wvd[2] === 0x44)) {
-        throw new Error(`wvd URL did not return a valid .wvd file (${wvd.length}b)`);
-      }
-      return wvd;
+function resolvedControlRequest(
+  serverUrl: string,
+  request: StreamControlRequest | null | undefined,
+  label: string,
+): StreamControlRequest {
+  if (!request?.url?.trim()) throw new Error(`Spotify streaming server returned no ${label} request`);
+  return {
+    ...request,
+    url: resolvedMediaURL(serverUrl, request.url),
+  };
+}
+
+function resolvedPreparation(
+  serverUrl: string,
+  preparation: BackendStreamResponse["preparation"] | null | undefined,
+): StreamPreparation {
+  if (!preparation) throw new Error("Spotify streaming server returned no preparation identity");
+  const id = preparation.id?.trim();
+  if (!id) throw new Error("Spotify streaming server returned no preparation identity");
+  return {
+    id,
+    statusRequest: resolvedControlRequest(serverUrl, preparation.statusRequest, "preparation status"),
+    cancelRequest: resolvedControlRequest(serverUrl, preparation.cancelRequest, "preparation cancellation"),
+    refreshRequest: preparation.refreshRequest
+      ? resolvedControlRequest(serverUrl, preparation.refreshRequest, "preparation refresh")
+      : null,
+  };
+}
+
+function positiveNumber(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function mediaDescription(format: string | null | undefined): {
+  container: StreamContainer;
+  codec: StreamCodec;
+  profile: string;
+} {
+  const mimeType = (format ?? "").split(";", 1)[0]?.trim().toLowerCase();
+  switch (mimeType) {
+    case "audio/flac":
+    case "audio/x-flac":
+      return { container: "flac", codec: "flac", profile: "flac" };
+    case "audio/mpeg":
+      return { container: "mp3", codec: "mp3", profile: "mp3" };
+    case "audio/aac":
+      return { container: "adts", codec: "aac", profile: "adts-aac" };
+    case "audio/mp4":
+      return { container: "m4a", codec: "aac", profile: "m4a-aac" };
+    default:
+      throw new Error(`Spotify streaming server returned unsupported media format: ${format ?? "missing"}`);
+  }
+}
+
+function expiresAtUnixMilliseconds(url: string): number | null {
+  const raw = new URL(url).searchParams.get("expires");
+  if (!raw) return null;
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.trunc(seconds * 1000) : null;
+}
+
+function exactCacheIdentity(value: string | null | undefined): string {
+  const identity = value?.trim();
+  if (!identity) throw new Error("Spotify streaming server returned no cache identity");
+  return identity;
+}
+
+function partialPersistence(value: StreamPartialPersistence | null | undefined): StreamPartialPersistence {
+  if (value === "immutablePrefix" || value === "validatedRanges") return value;
+  throw new Error("Spotify streaming server returned invalid partial persistence");
+}
+
+async function waitForCompleteFile(
+  preparation: StreamPreparation,
+  pollAfterMilliseconds: number | null,
+): Promise<void> {
+  const statusRequest = preparation.statusRequest;
+  if (!statusRequest) throw new Error("Spotify server returned no preparation status request");
+  const delay = Math.min(5_000, Math.max(100, pollAfterMilliseconds ?? 250));
+  const deadline = Date.now() + 120_000;
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    const response = await fetch(statusRequest.url, {
+      method: statusRequest.method.toUpperCase(),
+      headers: statusRequest.requestHeaders,
     });
-    p.catch(() => wvdCache.delete(wvdUrl));
-    wvdCache.set(wvdUrl, p);
+    if (!response.ok) {
+      throw new Error(`Spotify preparation status HTTP ${response.status}`);
+    }
+    const status = (await response.json()) as BackendStatusResponse;
+    if (status.lifecycle?.ready) return;
+    if (status.lifecycle?.state === "failed" || status.lifecycle?.state === "cancelled") {
+      throw new Error(status.lifecycle.error ?? `Spotify preparation ${status.lifecycle.state}`);
+    }
   }
-  return p;
+  throw new Error("Spotify preparation timed out");
 }
 
-function findBox(buf: Buffer, type: string): number {
-  const a = type.charCodeAt(0),
-    b = type.charCodeAt(1),
-    c = type.charCodeAt(2),
-    d = type.charCodeAt(3);
-  for (let i = 0; i + 4 <= buf.length; i++) {
-    if (buf[i] === a && buf[i + 1] === b && buf[i + 2] === c && buf[i + 3] === d) return i;
+async function cancelPreparation(preparation: StreamPreparation): Promise<void> {
+  const request = preparation.cancelRequest;
+  if (!request) return;
+  try {
+    await fetch(request.url, {
+      method: request.method.toUpperCase(),
+      headers: request.requestHeaders,
+    });
+  } catch {
+    // The server also expires abandoned leases; cancellation is best-effort on failure paths.
   }
-  return -1;
 }
 
-export async function handleStream(spDc: string, trackId: string, wvdUrl?: string): Promise<SpotifyStreamResult> {
-  console.log(`[stream] resolveStream trackId=${trackId}`);
-  if (!wvdUrl) throw new Error("streaming requires a Widevine device (.wvd) URL — set one in the addon configuration");
-  const token = await getAccessToken(spDc);
-  const clientToken = await getClientToken();
-  const h = authHeaders(token, clientToken, { Accept: "application/json" });
-
-  // 1) track-playback manifest -> Widevine CENC MP4/AAC file id
-  const fmts = "manifestFileFormat=file_ids_mp4&manifestFileFormat=file_ids_mp4_dual";
-  const media = await getJson(`${SPCLIENT}/track-playback/v1/media/spotify:track:${trackId}?${fmts}`, h);
-  const mediaMap = media?.media ?? {};
-  const entry: any = mediaMap[`spotify:track:${trackId}`] ?? Object.values(mediaMap)[0];
-  const item = entry?.item;
-  const manifest = item?.manifest ?? {};
-  const candidates: any[] = [...(manifest.file_ids_mp4 ?? []), ...(manifest.file_ids_mp4_dual ?? [])];
-  if (!candidates.length) throw new Error(`no MP4 (Widevine) file for track ${trackId}`);
-  const chosen = candidates.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0];
-  const fileId: string = chosen.file_id;
-  const durationMs = item?.metadata?.duration ?? item?.metadata?.length ?? null;
-  console.log(`[stream] file_id=${fileId} fmt=${chosen.format} bitrate=${chosen.bitrate}`);
-
-  // 2) storage-resolve -> CDN url for the complete encrypted fMP4
-  const sr = await getJson(`${SPCLIENT}/storage-resolve/files/audio/interactive/${fileId}?alt=json`, h);
-  const cdnUrl: string = sr?.cdnurl?.[0];
-  if (!cdnUrl) throw new Error("storage-resolve returned no CDN url");
-
-  // 3) read the fMP4 header -> pssh box (Widevine init data) + default KID (tenc)
-  const head = await getBuffer(cdnUrl, { Range: "bytes=0-65535", "User-Agent": UA });
-  const ti = findBox(head, "tenc");
-  if (ti < 0) throw new Error(`no tenc box in stream header (${head.length}b)`);
-  const pi = findBox(head, "pssh");
-  if (pi < 4) throw new Error("no pssh box in stream header");
-  const psshSize = head.readUInt32BE(pi - 4);
-  const psshBox = head.subarray(pi - 4, pi - 4 + psshSize);
-  const initData = psshInitData(psshBox);
-
-  // 4) Widevine privacy-mode license exchange -> content key
-  const cdm = new WidevineCDM(await loadWvd(wvdUrl));
-  const cert = await getBuffer(
-    `${SPCLIENT}/widevine-license/v1/application-certificate`,
-    authHeaders(token, clientToken),
-  );
-  cdm.setServiceCertificate(cert);
-  const challenge = cdm.getChallenge(initData);
-  const licRes = await fetch(`${SPCLIENT}/widevine-license/v1/audio/license`, {
-    method: "POST",
-    headers: authHeaders(token, clientToken, { "Content-Type": "application/octet-stream" }),
-    body: challenge,
-  });
-  if (!licRes.ok) throw new Error(`widevine license HTTP ${licRes.status}`);
-  const license = Buffer.from(await licRes.arrayBuffer());
-  const ck = cdm.parseLicense(license);
-  console.log(`[stream] content key ready (kid=${ck.kid}) — returning encrypted fMP4 url + key`);
-
+export function mapBackendStreamResponse(result: BackendStreamResponse, serverUrl: string): ReadyStream {
+  if (result.state !== "ready" && result.state !== "preparing") {
+    throw new Error("Spotify streaming server returned invalid stream state");
+  }
+  const returnedURL = result.url?.trim();
+  if (!returnedURL) throw new Error("Spotify streaming server returned no media URL");
+  if (result.transport !== "progressive" && result.transport !== "completeFile") {
+    throw new Error("Spotify streaming server returned invalid transport");
+  }
+  if (result.rangeSupport !== "bytes" || result.seekMode !== "byteRange") {
+    throw new Error("Spotify streaming server returned invalid byte-range contract");
+  }
+  const url = resolvedMediaURL(serverUrl, returnedURL);
+  const media = mediaDescription(result.format);
+  const preparation = resolvedPreparation(serverUrl, result.preparation);
   return {
-    url: cdnUrl,
-    bitrate: chosen.bitrate ?? 256000,
-    durationSeconds: durationMs ? Math.round(durationMs / 1000) : null,
-    format: "video/mp4",
-    keyId: ck.kid,
-    key: ck.key,
+    schemaVersion: 1,
+    state: "ready",
+    url,
+    transport: result.transport,
+    container: media.container,
+    codec: media.codec,
+    requestHeaders: {},
+    bitrate: positiveNumber(result.bitrate),
+    durationSeconds: positiveNumber(result.durationSeconds),
+    contentLength: positiveNumber(result.contentLength),
+    sampleRate: null,
+    bitDepth: positiveNumber(result.bitDepth),
+    channelCount: null,
+    rangeSupport: result.rangeSupport,
+    seekMode: result.seekMode,
+    expiresAtUnixMilliseconds: expiresAtUnixMilliseconds(url),
+    cacheIdentity: exactCacheIdentity(result.cacheIdentity),
+    cachePolicy: "cacheable",
+    partialPersistence: partialPersistence(result.partialPersistence),
+    preparation,
   };
+}
+
+export async function handleStream(
+  spDc: string,
+  trackId: string,
+  serverUrl: string,
+  serverToken: string,
+): Promise<SpotifyStreamDescriptor> {
+  console.log(`[stream] resolveStream trackId=${trackId}`);
+  if (!serverToken?.trim()) throw new Error("Spotify streaming server token is not configured");
+
+  try {
+    const accessToken = await getAccessToken(spDc);
+    const endpoint = serverEndpoint(serverUrl);
+    console.log(`[stream] access token ready; contacting ${endpoint.host}`);
+    const response = await fetch(endpoint.href, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serverToken.trim()}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ trackId, accessToken }),
+    });
+    if (!response.ok) {
+      throw new Error(`Spotify streaming server HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+
+    const result = (await response.json()) as BackendStreamResponse;
+    const stream = mapBackendStreamResponse(result, serverUrl);
+    if (result.state === "preparing") {
+      try {
+        await waitForCompleteFile(stream.preparation!, result.pollAfterMilliseconds);
+      } catch (error) {
+        await cancelPreparation(stream.preparation!);
+        throw error;
+      }
+    }
+    return stream;
+  } catch (error) {
+    console.error(`[stream] failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw error;
+  }
 }

@@ -1,5 +1,6 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
+import { parseTrackMetadata } from "../track-metadata";
 import type { AlbumDetail, Track, YouTubeMusicConfig } from "../types";
 import { bestThumbnail, PROVIDER_ID } from "../utils";
 
@@ -24,6 +25,11 @@ export async function handleAlbum(config: YouTubeMusicConfig, browseId: string):
 
     const trackCountMatch = textLine2.match(/(\d+)\s+song/i);
     const trackCount = trackCountMatch ? `${trackCountMatch[1]} songs` : null;
+    const albumMetadata = parseTrackMetadata(hData, {
+      ...(year ? { releaseYear: Number(year) } : {}),
+      ...(artists.length > 0 ? { albumArtists: artists } : {}),
+      ...(trackCountMatch ? { trackTotal: Number(trackCountMatch[1]) } : {}),
+    });
 
     const thumbSources = hData.primaryImage?.sources ?? [];
     const thumbnailUrl = bestThumbnail(thumbSources);
@@ -67,6 +73,7 @@ export async function handleAlbum(config: YouTubeMusicConfig, browseId: string):
         durationSeconds: duration.seconds,
         thumbnailURL: bestThumbnail(trackThumb) ?? thumbnailUrl,
         isExplicit: false,
+        ...parseTrackMetadata(listItem, albumMetadata),
       });
     }
 

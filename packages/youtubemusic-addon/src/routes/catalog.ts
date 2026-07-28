@@ -90,6 +90,20 @@ export async function handleHome(config: YouTubeMusicConfig, continuation?: stri
           switch (qa.action.type) {
             case "playTrack": {
               const isIFL = qa.action.trackId === "_ifl";
+              if (isIFL) {
+                return [
+                  {
+                    type: "station",
+                    station: {
+                      id: "_ifl",
+                      provider: PROVIDER_ID,
+                      title: qa.title,
+                      subtitle: "Station",
+                      thumbnailURL: qa.thumbnailURL,
+                    },
+                  },
+                ];
+              }
               const m = isIFL ? undefined : meta.get(qa.action.trackId!);
               return [
                 {
@@ -104,7 +118,6 @@ export async function handleHome(config: YouTubeMusicConfig, continuation?: stri
                     durationSeconds: m?.durationSeconds ?? null,
                     thumbnailURL: qa.thumbnailURL ?? m?.thumbnailURL ?? null,
                     isExplicit: m?.isExplicit ?? false,
-                    ...(isIFL ? { isEphemeral: true } : {}),
                   },
                   playlistId: qa.action.playlistId ?? undefined,
                 },

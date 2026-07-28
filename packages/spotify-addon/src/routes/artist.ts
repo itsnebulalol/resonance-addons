@@ -1,21 +1,13 @@
 import { AddonError } from "@resonance-addons/sdk";
+import { transformGraphQLTrackItem } from "../track-mapping";
 import type { ArtistDetail, SearchAlbum, SearchArtist } from "../types";
-import {
-  bestImageFromSources,
-  formatFollowers,
-  OperationHash,
-  PROVIDER_ID,
-  pf,
-  transformGraphQLTrack,
-  uriToId,
-} from "../utils";
+import { bestImageFromSources, formatFollowers, OperationHash, PROVIDER_ID, pf, uriToId } from "../utils";
 
 function mapTracks(items: any[] | undefined): ArtistDetail["topTracks"] {
   const tracks: ArtistDetail["topTracks"] = [];
   for (const item of items ?? []) {
-    const trackData = item?.track ?? item?.data ?? item;
-    if (!trackData?.uri || !String(trackData.uri).startsWith("spotify:track:")) continue;
-    tracks.push(transformGraphQLTrack(trackData));
+    const track = transformGraphQLTrackItem(item);
+    if (track) tracks.push(track);
   }
   return tracks;
 }
@@ -116,12 +108,13 @@ export async function handleArtist(spDc: string, artistId: string): Promise<Arti
       throw new AddonError("Artist not found", 404);
     }
 
+    const topTracks = mapTracks(artistData?.discography?.topTracks?.items);
     return {
       id: uriToId(artistData.uri),
       name: artistData?.profile?.name ?? "",
       thumbnailURL: bestImageFromSources(artistData?.visuals?.avatarImage?.sources ?? []),
       subtitle: buildSubtitle(artistData?.stats),
-      topTracks: mapTracks(artistData?.discography?.topTracks?.items),
+      topTracks,
       albums: mapReleases(
         artistData?.discography?.albums?.items,
         uriToId(artistData.uri),

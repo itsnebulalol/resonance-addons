@@ -1,7 +1,8 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
 import { resolveIFL } from "../ifl";
-import type { QueueAction, QueueContinuation, QueuePage, Track, YouTubeMusicConfig } from "../types";
+import { fillMissingTrackMetadata, parseTrackMetadata } from "../track-metadata";
+import type { QueueAction, QueueContinuation, QueuePage, Station, Track, YouTubeMusicConfig } from "../types";
 import { bestThumbnail, PROVIDER_ID, unwrapPlaylistPanelVideo } from "../utils";
 
 export async function handleQueueStart(config: YouTubeMusicConfig, videoId: string, context?: any): Promise<QueuePage> {
@@ -100,6 +101,18 @@ export async function handleQueueMore(config: YouTubeMusicConfig, token: string)
     if (e instanceof AddonError) throw e;
     throw new AddonError(e.message, 500);
   }
+}
+
+export async function handleStationStart(config: YouTubeMusicConfig, station: Station): Promise<QueuePage> {
+  if (station.id !== "_ifl") {
+    throw new AddonError("Unknown station", 404);
+  }
+  const seed = await resolveIFL(config);
+  const page = await handleQueueStart(config, seed);
+  return {
+    ...page,
+    title: station.title,
+  };
 }
 
 export async function handleQueueAction(
@@ -240,7 +253,10 @@ async function enrichAlbumInfo(config: YouTubeMusicConfig, tracks: Track[]): Pro
 
   let enriched = 0;
   for (const track of needsAlbum) {
-    const album = meta.get(track.id)?.album;
+    const fetched = meta.get(track.id);
+    if (!fetched) continue;
+    fillMissingTrackMetadata(track, fetched);
+    const album = fetched.album;
     if (album?.id) {
       track.album = album;
       enriched++;
@@ -358,5 +374,6 @@ export function parsePlaylistPanelVideoRaw(renderer: any): Track | null {
     durationSeconds,
     thumbnailURL: thumbnailUrl,
     isExplicit: false,
+    ...parseTrackMetadata(renderer),
   };
 }

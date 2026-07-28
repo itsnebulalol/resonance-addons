@@ -8,12 +8,15 @@ import { handleLyrics } from "./routes/lyrics";
 import {
   handleAddToPlaylist,
   handleCreatePlaylist,
+  handleDeletePlaylist,
+  handleFavoriteCollection,
   handleGetLikeStatus,
   handleLike,
-  handleRemoveFromPlaylist,
+  handleRemovePlaylistEntry,
+  handleUpdatePlaylist,
 } from "./routes/mutations";
 import { handlePlaylist, handlePlaylistMore } from "./routes/playlist";
-import { handleQueueAction, handleQueueMore, handleQueueStart } from "./routes/queue";
+import { handleQueueAction, handleQueueMore, handleQueueStart, handleStationStart } from "./routes/queue";
 import { handleRelated, handleRelatedForTrack } from "./routes/related";
 import { handleSearch, handleSearchSuggestions } from "./routes/search";
 import { handleStream } from "./routes/stream";
@@ -24,7 +27,7 @@ export const addon = defineAddon<YouTubeMusicConfig>({
   id: PROVIDER_ID,
   name: "YouTube Music",
   description: "Stream, browse, search, manage your library, and sync listening history with YouTube Music",
-  version: "2.0.0",
+  version: "2.3.0",
   icon: { type: "remote", value: "https://i.postimg.cc/KjDMdWyX/You-Tube-Music-2024-svg.png" },
   resources: [
     { type: "stream", idPrefixes: [PROVIDER_ID] },
@@ -73,31 +76,38 @@ export const addon = defineAddon<YouTubeMusicConfig>({
     getAlbumDetail: (config, id) => handleAlbum(config, id),
     getArtistDetail: (config, id) => handleArtist(config, id),
     getPlaylistDetail: (config, id) => handlePlaylist(config, id),
-    loadMorePlaylistTracks: (config, id, continuation) => handlePlaylistMore(config, id, continuation),
+    loadMorePlaylistEntries: (config, id, continuation) => handlePlaylistMore(config, id, continuation),
     getRelated: (config, browseId) => handleRelated(config, browseId),
     getRelatedForTrack: (config, trackId) => handleRelatedForTrack(config, trackId),
     startQueue: (config, trackId, context) => handleQueueStart(config, trackId, context),
+    startStation: (config, station) => handleStationStart(config, station),
     loadMore: (config, token) => handleQueueMore(config, token),
     executeAction: (config, action, currentTrack) => handleQueueAction(config, { action, currentTrack }),
     setLikeStatus: (config, status, videoId) =>
       handleLike(config, { status: status as "liked" | "disliked" | "none", videoId }).then(() => {}),
     getLikeStatus: (config, videoId) => handleGetLikeStatus(config, videoId),
+    getFavoriteCollection: () => handleFavoriteCollection(),
     addToPlaylist: (config, trackId, playlistId) =>
       handleAddToPlaylist(config, { videoId: trackId, playlistId }).then(() => {}),
     createPlaylist: (config, name) => handleCreatePlaylist(config, name),
-    removeFromPlaylist: (config, trackId, playlistId) =>
-      handleRemoveFromPlaylist(config, trackId, playlistId).then(() => {}),
+    updatePlaylist: (config, request) => handleUpdatePlaylist(config, request),
+    removeFromPlaylist: (config, entryId, trackId, playlistId) =>
+      handleRemovePlaylistEntry(config, entryId, trackId, playlistId).then(() => {}),
+    deletePlaylist: (config, playlistId) => handleDeletePlaylist(config, playlistId).then(() => {}),
   },
 
   capabilities: {
     supportsRadio: true,
+    supportsStations: true,
     supportsQueueActions: true,
     supportsContinuation: true,
     supportsSearchSuggestions: true,
     supportsLikeStatus: true,
     supportsAddToPlaylist: true,
     supportsCreatePlaylist: true,
+    supportsEditPlaylist: true,
     supportsRemoveFromPlaylist: true,
+    supportsDeletePlaylist: true,
     supportsFilters: true,
     supportsQuickAccess: true,
     supportsRelated: true,

@@ -1,4 +1,4 @@
-import { AddonError } from "@resonance-addons/sdk";
+import { AddonError, playlistRevision } from "@resonance-addons/sdk";
 import {
   artworkURL,
   countText,
@@ -27,11 +27,12 @@ import type {
   AlbumDetail,
   ArtistDetail,
   PlaylistDetail,
+  PlaylistEntry,
+  PlaylistEntryPage,
   SearchAlbum,
   SearchArtist,
   SearchPlaylist,
   Track,
-  TrackPage,
 } from "../types";
 
 export async function handleAlbum(config: SoundCloudConfig, playlistId: string): Promise<AlbumDetail> {
@@ -59,11 +60,52 @@ export async function handleAlbum(config: SoundCloudConfig, playlistId: string):
 
 export async function handlePlaylist(config: SoundCloudConfig, playlistId: string): Promise<PlaylistDetail> {
   try {
+    if (playlistId === "__likes__") {
+      const user = await scFetch<SoundCloudUser>(config, "/me");
+      if (user.id == null) throw new AddonError("SoundCloud user ID is unavailable", 404);
+      const data = await scFetch<SoundCloudCollection<SoundCloudTrack | { track?: SoundCloudTrack }>>(
+        config,
+        `/users/${encodeURIComponent(String(user.id))}/track_likes`,
+        { limit: 100, offset: 0, linked_partitioning: 1 },
+      );
+      const rawTracks = (data.collection ?? [])
+        .map((item) => ("track" in item && item.track ? item.track : item))
+        .filter((item): item is SoundCloudTrack => !("track" in item))
+        .filter((track) => track?.id != null);
+      const tracks = soundCloudTracksToTracks(await hydrateTracks(config, rawTracks));
+      const entries = tracks.map((track) => ({
+        id: `like:${track.id}`,
+        track,
+      }));
+      return {
+        id: playlistId,
+        title: "Likes",
+        author: userDisplayName(user),
+        description: null,
+        trackCount: countText(user.likes_count ?? tracks.length, "track"),
+        thumbnailURL: tracks.find((track) => track.thumbnailURL)?.thumbnailURL ?? artworkURL(user.avatar_url),
+        entries,
+        continuation: data.next_href ?? null,
+        revision: playlistRevision("Likes", entries),
+        editCapabilities: {
+          canRename: false,
+          canChangeArtwork: false,
+          canReorder: false,
+          canRemoveItems: false,
+        },
+      };
+    }
     const [playlist, currentUser] = await Promise.all([
       fetchPlaylist(config, playlistId),
       hasOAuth(config) ? scFetch<SoundCloudUser>(config, "/me") : Promise.resolve(null),
     ]);
     const tracks = (await playlistTracks(config, playlist)).filter((track) => track.id);
+    const entries: PlaylistEntry[] = tracks.map((track, index) => ({
+      id: String(playlist.tracks?.[index]?.urn ?? playlist.tracks?.[index]?.id ?? track.id),
+      track,
+    }));
+    const editable =
+      currentUser?.id != null && playlist.user?.id != null && String(currentUser.id) === String(playlist.user.id);
     return {
       id: String(playlist.id ?? playlistId),
       title: playlist.title ?? "",
@@ -74,10 +116,22 @@ export async function handlePlaylist(config: SoundCloudConfig, playlistId: strin
         artworkURL(playlist.artwork_url) ??
         artworkURL(playlist.tracks?.[0]?.artwork_url) ??
         artworkURL(playlist.user?.avatar_url),
-      tracks,
+      entries,
       continuation: null,
-      canEdit:
-        currentUser?.id != null && playlist.user?.id != null && String(currentUser.id) === String(playlist.user.id),
+      revision: `${playlist.last_modified ?? ""}:${playlistRevision(playlist.title ?? "", entries)}`,
+      editCapabilities: editable
+        ? {
+            canRename: true,
+            canChangeArtwork: false,
+            canReorder: true,
+            canRemoveItems: true,
+          }
+        : {
+            canRename: false,
+            canChangeArtwork: false,
+            canReorder: false,
+            canRemoveItems: false,
+          },
     };
   } catch (error: any) {
     console.error("[soundcloud:detail] Playlist error:", error.message);
@@ -90,7 +144,7 @@ export async function handlePlaylistMore(
   config: SoundCloudConfig,
   _playlistId: string,
   continuation: string,
-): Promise<TrackPage> {
+): Promise<PlaylistEntryPage> {
   try {
     const data = await scFetch<SoundCloudCollection<SoundCloudTrack | { track?: SoundCloudTrack }>>(
       config,
@@ -100,8 +154,9 @@ export async function handlePlaylistMore(
       .map((item) => ("track" in item && item.track ? item.track : item))
       .filter((item): item is SoundCloudTrack => !("track" in item))
       .filter((track): track is SoundCloudTrack => Boolean(track?.id));
+    const tracks = soundCloudTracksToTracks(await hydrateTracks(config, rawTracks));
     return {
-      tracks: soundCloudTracksToTracks(await hydrateTracks(config, rawTracks)),
+      entries: tracks.map((track) => ({ id: `like:${track.id}`, track })),
       continuation: data.next_href ?? null,
     };
   } catch (error: any) {

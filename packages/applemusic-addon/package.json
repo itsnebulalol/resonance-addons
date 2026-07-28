@@ -7,7 +7,6 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@resonance-addons/sdk": "*",
-    "node-forge": "^1.4.0"
+    "@resonance-addons/sdk": "*"
   }
 }

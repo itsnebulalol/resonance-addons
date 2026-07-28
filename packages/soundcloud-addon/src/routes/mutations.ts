@@ -1,4 +1,4 @@
-import { AddonError } from "@resonance-addons/sdk";
+import { AddonError, playlistRevision } from "@resonance-addons/sdk";
 import {
   fetchPlaylist,
   hasOAuth,
@@ -9,7 +9,8 @@ import {
   type SoundCloudPlaylist,
   scFetch,
 } from "../api";
-import type { SearchPlaylist } from "../types";
+import type { PlaylistDetail, PlaylistEntry, PlaylistUpdateRequest, SearchPlaylist } from "../types";
+import { handlePlaylist } from "./detail";
 
 async function allIds(config: SoundCloudConfig, endpoint: string): Promise<Set<string>> {
   requireOAuth(config);
@@ -41,14 +42,44 @@ export async function handleGetLikeStatus(config: SoundCloudConfig, trackId: str
 
 export async function handleLike(
   config: SoundCloudConfig,
-  _status: "liked" | "disliked" | "none",
-  _trackId: string,
+  status: "liked" | "disliked" | "none",
+  trackId: string,
 ): Promise<{ success: true }> {
   requireOAuth(config);
-  throw new AddonError(
-    "Changing SoundCloud like status is not supported yet: the current web OAuth token exposes like reads, but the live v2 mutation endpoints tested returned 404.",
-    501,
-  );
+  const user = await scFetch<{ id?: string | number }>(config, "/me");
+  if (user.id == null) {
+    throw new AddonError("SoundCloud user ID is unavailable", 404);
+  }
+  try {
+    await scFetch(
+      config,
+      `/users/${encodeURIComponent(String(user.id))}/track_likes/${encodeURIComponent(String(trackId))}`,
+      undefined,
+      { method: status === "liked" ? "PUT" : "DELETE" },
+    );
+    return { success: true };
+  } catch (error: any) {
+    if (error instanceof AddonError && error.status === 403 && !config.datadome?.trim()) {
+      throw new AddonError(
+        "SoundCloud blocked the like request. Add the current datadome cookie in SoundCloud provider settings.",
+        403,
+      );
+    }
+    throw error;
+  }
+}
+
+export async function handleFavoriteCollection(): Promise<SearchPlaylist> {
+  return {
+    id: "__likes__",
+    provider: "net.itsnebula.soundcloud",
+    title: "Likes",
+    author: null,
+    trackCount: null,
+    thumbnailURL: null,
+    canAddTracks: false,
+    canDelete: false,
+  };
 }
 
 async function updatePlaylistTracks(
@@ -63,8 +94,6 @@ async function updatePlaylistTracks(
     method: "PUT",
     body: JSON.stringify({
       playlist: {
-        title: playlist.title ?? "",
-        sharing: "private",
         tracks: trackIds.map(Number),
       },
     }),
@@ -100,6 +129,7 @@ export async function handleCreatePlaylist(config: SoundCloudConfig, name: strin
   return {
     ...playlistToSearchPlaylist(playlist, me.id == null ? null : String(me.id)),
     canAddTracks: true,
+    canDelete: true,
   };
 }
 
@@ -115,6 +145,77 @@ export async function handleRemoveFromPlaylist(
     throw new AddonError("Track was not found in this SoundCloud playlist", 404);
   }
   await updatePlaylistTracks(config, playlist, ids);
+}
+
+function playlistEntries(playlist: SoundCloudPlaylist): PlaylistEntry[] {
+  return (playlist.tracks ?? []).flatMap((track) => {
+    if (track.id == null) return [];
+    const id = String(track.id);
+    return [
+      {
+        id: String(track.urn ?? id),
+        track: {
+          id,
+          provider: "net.itsnebula.soundcloud",
+          title: track.title ?? "",
+          artists: track.user?.username
+            ? [{ id: track.user.id == null ? null : String(track.user.id), name: track.user.username }]
+            : [],
+          album: null,
+          duration: null,
+          durationSeconds: track.duration ? Math.round(track.duration / 1000) : null,
+          thumbnailURL: track.artwork_url ?? null,
+          isExplicit: track.publisher_metadata?.explicit === true,
+        },
+      },
+    ];
+  });
+}
+
+export async function handleRemovePlaylistEntry(
+  config: SoundCloudConfig,
+  entryId: string,
+  _trackId: string,
+  playlistId: string,
+): Promise<void> {
+  const playlist = await fetchPlaylist(config, playlistId);
+  const tracks = playlist.tracks ?? [];
+  const index = tracks.findIndex((track) => String(track.urn ?? track.id ?? "") === entryId);
+  if (index < 0) throw new AddonError("Playlist entry was not found.", 404);
+  tracks.splice(index, 1);
+  await updatePlaylistTracks(
+    config,
+    playlist,
+    tracks.map((track) => String(track.id)),
+  );
+}
+
+export async function handleUpdatePlaylist(
+  config: SoundCloudConfig,
+  request: PlaylistUpdateRequest,
+): Promise<PlaylistDetail> {
+  const playlist = await fetchPlaylist(config, request.playlistID);
+  const currentEntries = playlistEntries(playlist);
+  const currentRevision = `${playlist.last_modified ?? ""}:${playlistRevision(playlist.title ?? "", currentEntries)}`;
+  if (request.revision && currentRevision !== request.revision) {
+    throw new AddonError("The playlist changed on another device. Reload it and try again.", 409);
+  }
+  if (playlist.track_count != null && playlist.track_count !== (playlist.tracks?.length ?? 0)) {
+    throw new AddonError("SoundCloud returned an incomplete playlist. Reload it before editing.", 409);
+  }
+  if (request.artwork) {
+    throw new AddonError("SoundCloud playlist artwork editing requires official OAuth access.", 400);
+  }
+  await scFetch(config, `/playlists/${encodeURIComponent(request.playlistID)}`, undefined, {
+    method: "PUT",
+    body: JSON.stringify({
+      playlist: {
+        title: request.name,
+        tracks: request.entries.map((entry) => Number(entry.track.id)),
+      },
+    }),
+  });
+  return handlePlaylist(config, request.playlistID);
 }
 
 export async function handleDeletePlaylist(config: SoundCloudConfig, playlistId: string): Promise<void> {

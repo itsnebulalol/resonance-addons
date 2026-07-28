@@ -1,6 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
+import { transformGraphQLAlbumTrack, transformGraphQLTrackItem } from "../track-mapping";
 import type { QueuePage, Track } from "../types";
-import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, transformGraphQLTrack, uriToId } from "../utils";
+import { OperationHash, PROVIDER_ID, pf } from "../utils";
 
 const PAGE_LIMIT = 50;
 
@@ -43,35 +44,8 @@ function sliceFromTrack(tracks: Track[], trackId: string): Track[] {
   return idx >= 0 ? tracks.slice(idx) : tracks;
 }
 
-function albumTrack(trackEntry: any, albumData: any, fallbackAlbumId: string): Track | null {
-  const rawTrack = trackEntry?.track ?? trackEntry;
-  if (!rawTrack?.uri || !String(rawTrack.uri).startsWith("spotify:track:")) return null;
-
-  const normalized = rawTrack.albumOfTrack
-    ? rawTrack
-    : {
-        ...rawTrack,
-        albumOfTrack: {
-          uri: albumData?.uri ?? `spotify:album:${fallbackAlbumId}`,
-          name: albumData?.name ?? "",
-          coverArt: albumData?.coverArt ?? null,
-        },
-      };
-
-  const mapped = transformGraphQLTrack(normalized);
-  const albumUri = (albumData?.uri as string) ?? `spotify:album:${fallbackAlbumId}`;
-
-  return {
-    ...mapped,
-    album: { id: uriToId(albumUri), name: albumData?.name ?? mapped.album?.name ?? "" },
-    thumbnailURL: mapped.thumbnailURL ?? bestImageFromSources(albumData?.coverArt?.sources ?? []),
-  };
-}
-
 function playlistTrack(item: any): Track | null {
-  const trackData = item?.itemV2?.data;
-  if (!trackData?.uri || !String(trackData.uri).startsWith("spotify:track:")) return null;
-  return transformGraphQLTrack(trackData);
+  return transformGraphQLTrackItem(item);
 }
 
 async function fetchRecommendations(spDc: string, seedTrackId: string): Promise<Track[]> {
@@ -80,12 +54,10 @@ async function fetchRecommendations(spDc: string, seedTrackId: string): Promise<
     hash: OperationHash.internalLinkRecommenderTrack,
     variables: { uri: `spotify:track:${seedTrackId}`, limit: 50 },
   });
-  return (data?.seoRecommendedTrack?.items ?? [])
-    .map((item: any) => {
-      const td = item?.data;
-      return td?.uri ? transformGraphQLTrack(td) : null;
-    })
+  const tracks = (data?.seoRecommendedTrack?.items ?? [])
+    .map((item: any) => transformGraphQLTrackItem(item))
     .filter((t: Track | null): t is Track => t != null);
+  return tracks;
 }
 
 async function queueFromAlbum(
@@ -106,9 +78,10 @@ async function queueFromAlbum(
 
   const rawItems = albumData?.tracksV2?.items ?? [];
   const total = albumData?.tracksV2?.totalCount;
-  const tracks = rawItems
-    .map((i: any) => albumTrack(i, albumData, albumId))
+  const mappedTracks = rawItems
+    .map((i: any) => transformGraphQLAlbumTrack(i, albumData, albumId))
     .filter((t: Track | null): t is Track => t != null);
+  const tracks = mappedTracks;
   const finalTracks = trim && trackId ? sliceFromTrack(tracks, trackId) : tracks;
 
   const hasMore = typeof total === "number" && offset + rawItems.length < total;
@@ -142,7 +115,8 @@ async function queueFromPlaylist(
 
   const rawItems = playlistData?.content?.items ?? [];
   const total = playlistData?.content?.totalCount;
-  const tracks = rawItems.map((i: any) => playlistTrack(i)).filter((t: Track | null): t is Track => t != null);
+  const mappedTracks = rawItems.map((i: any) => playlistTrack(i)).filter((t: Track | null): t is Track => t != null);
+  const tracks = mappedTracks;
   const finalTracks = trim && trackId ? sliceFromTrack(tracks, trackId) : tracks;
 
   const hasMore = typeof total === "number" && offset + rawItems.length < total;

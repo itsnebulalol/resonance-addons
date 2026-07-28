@@ -1,5 +1,5 @@
 import { AddonError } from "@resonance-addons/sdk";
-import type { HomeItem, SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem, Track } from "./types";
+import type { ArtistRef, HomeItem, SearchAlbum, SearchArtist, SearchPlaylist, SearchResultItem, Track } from "./types";
 
 export const PROVIDER_ID = "net.itsnebula.soundcloud";
 export const DEFAULT_CLIENT_ID = "lmRjTI0FqeXygHMXc3hRzS7hth20PNk5";
@@ -10,6 +10,7 @@ const TRACK_HYDRATE_FALLBACK_CONCURRENCY = 8;
 
 export interface SoundCloudConfig {
   oauthToken?: string;
+  datadome?: string;
 }
 
 export interface SoundCloudCollection<T = any> {
@@ -64,6 +65,12 @@ export interface SoundCloudTrack {
   label_name?: string | null;
   release_date?: string | null;
   display_date?: string | null;
+  bpm?: number | string | null;
+  key_signature?: string | null;
+  track_number?: number | string | null;
+  track_total?: number | string | null;
+  disc_number?: number | string | null;
+  disc_total?: number | string | null;
   likes_count?: number | null;
   playback_count?: number | null;
   comment_count?: number | null;
@@ -95,6 +102,7 @@ export interface SoundCloudPlaylist {
   release_date?: string | null;
   display_date?: string | null;
   published_at?: string | null;
+  last_modified?: string | null;
   user?: SoundCloudUser | null;
   tracks?: SoundCloudTrack[] | null;
 }
@@ -127,6 +135,8 @@ export async function scFetch<T = any>(
   const headers: Record<string, string> = { Accept: "application/json" };
   const token = config.oauthToken?.trim();
   if (token) headers.Authorization = /^(OAuth|Bearer)\s+/i.test(token) ? token : `OAuth ${token}`;
+  const datadome = config.datadome?.trim();
+  if (datadome) headers.Cookie = datadome.includes("=") ? datadome : `datadome=${datadome}`;
   if (init?.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
 
   const response = await fetch(url.toString(), {
@@ -255,15 +265,16 @@ export function isAlbumSet(playlist: SoundCloudPlaylist): boolean {
 export function trackToTrack(track: SoundCloudTrack): Track {
   const id = String(track.id ?? "");
   const durationMs = track.full_duration ?? track.duration ?? null;
-  const artistName = trackDisplayArtistName(track) || "Unknown";
-  const userId = track.user?.id === undefined || track.user?.id === null ? null : String(track.user.id);
+  const artist = trackArtistRef(track);
   const albumTitle = track.publisher_metadata?.album_title?.trim();
+  const genre = track.genre?.trim();
+  const creditedArtist = track.publisher_metadata?.artist?.trim();
 
   return {
     id,
     provider: PROVIDER_ID,
     title: track.title ?? "",
-    artists: [{ id: userId, name: artistName }],
+    artists: [artist],
     album: albumTitle ? { id: null, name: albumTitle } : null,
     duration: msToDuration(durationMs),
     durationSeconds: msToSeconds(durationMs),
@@ -272,6 +283,15 @@ export function trackToTrack(track: SoundCloudTrack): Track {
       track.publisher_metadata?.explicit === true ||
       (track as any).explicit === true ||
       (track as any).content_rating === "explicit",
+    genres: genre ? [genre] : null,
+    releaseYear: releaseYearOf(track.release_date) ?? releaseYearOf(track.display_date),
+    albumArtists: creditedArtist ? [artist] : null,
+    trackNumber: positiveInteger(track.track_number),
+    trackTotal: positiveInteger(track.track_total),
+    discNumber: positiveInteger(track.disc_number),
+    discTotal: positiveInteger(track.disc_total),
+    bpm: positiveNumber(track.bpm),
+    musicalKey: nonEmptyString(track.key_signature),
   };
 }
 
@@ -298,6 +318,7 @@ export function playlistToSearchPlaylist(playlist: SoundCloudPlaylist, currentUs
       artworkURL(playlist.user?.avatar_url),
     canAddTracks:
       currentUserId == null || playlist.user?.id == null ? null : String(playlist.user.id) === currentUserId,
+    canDelete: currentUserId == null || playlist.user?.id == null ? null : String(playlist.user.id) === currentUserId,
   };
 }
 
@@ -380,7 +401,8 @@ export function artworkURL(url?: string | null, size = "t500x500"): string | nul
 
 export function msToSeconds(ms?: number | null): number | null {
   if (!ms || ms <= 0) return null;
-  return Math.round(ms / 1000);
+  const seconds = Math.round(ms / 1000);
+  return seconds > 0 ? seconds : null;
 }
 
 export function msToDuration(ms?: number | null): string | null {
@@ -411,6 +433,16 @@ function trackDisplayArtistName(track: SoundCloudTrack): string | null {
   return track.publisher_metadata?.artist?.trim() || userDisplayName(track.user);
 }
 
+function trackArtistRef(track: SoundCloudTrack): ArtistRef {
+  const creditedArtist = track.publisher_metadata?.artist?.trim();
+  const uploaderName = userDisplayName(track.user);
+  const userId = track.user?.id === undefined || track.user?.id === null ? null : String(track.user.id);
+  return {
+    id: !creditedArtist || creditedArtist === uploaderName ? userId : null,
+    name: creditedArtist || uploaderName || "Unknown",
+  };
+}
+
 function soundCloudTrackId(track?: SoundCloudTrack | null): string | null {
   if (track?.id === undefined || track.id === null) return null;
   return String(track.id);
@@ -425,7 +457,20 @@ function trackNeedsHydration(track: SoundCloudTrack): boolean {
 
 function richerTrack(original: SoundCloudTrack, candidate?: SoundCloudTrack | null): SoundCloudTrack {
   if (!candidate) return original;
-  return trackCompletenessScore(candidate) >= trackCompletenessScore(original) ? candidate : original;
+  const preferred = trackCompletenessScore(candidate) >= trackCompletenessScore(original) ? candidate : original;
+  const fallback = preferred === candidate ? original : candidate;
+  const merged = mergePayloadObjects(fallback, preferred);
+  merged.user = mergePayloadObjects(fallback.user, preferred.user);
+  merged.publisher_metadata = mergePayloadObjects(fallback.publisher_metadata, preferred.publisher_metadata);
+
+  const media = mergePayloadObjects(fallback.media, preferred.media);
+  if (media) {
+    media.transcodings = preferred.media?.transcodings?.length
+      ? preferred.media.transcodings
+      : fallback.media?.transcodings;
+  }
+  merged.media = media;
+  return merged;
 }
 
 function trackCompletenessScore(track: SoundCloudTrack): number {
@@ -444,6 +489,43 @@ function chunks<T>(values: T[], size: number): T[][] {
     result.push(values.slice(index, index + size));
   }
   return result;
+}
+
+function mergePayloadObjects<T extends object>(fallback?: T | null, preferred?: T | null): T {
+  const merged = { ...(fallback ?? {}) } as T;
+  for (const [key, value] of Object.entries(preferred ?? {})) {
+    if (hasPayloadValue(value)) {
+      (merged as Record<string, unknown>)[key] = value;
+    }
+  }
+  return merged;
+}
+
+function hasPayloadValue(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+function releaseYearOf(value?: string | null): number | null {
+  const year = yearOf(value);
+  return year ? Number(year) : null;
+}
+
+function positiveInteger(value?: number | string | null): number | null {
+  const number = typeof value === "string" ? Number(value.trim()) : value;
+  return typeof number === "number" && Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function positiveNumber(value?: number | string | null): number | null {
+  const number = typeof value === "string" ? Number(value.trim()) : value;
+  return typeof number === "number" && Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function nonEmptyString(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed || null;
 }
 
 export function dedupeSearchItems(items: SearchResultItem[]): SearchResultItem[] {

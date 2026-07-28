@@ -1,6 +1,7 @@
-import { AddonError } from "@resonance-addons/sdk";
+import { AddonError, playlistRevision } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
-import type { PlaylistDetail, Track, TrackPage, YouTubeMusicConfig } from "../types";
+import { parseTrackMetadata } from "../track-metadata";
+import type { PlaylistDetail, PlaylistEntry, PlaylistEntryPage, Track, YouTubeMusicConfig } from "../types";
 import { bestThumbnail, PROVIDER_ID } from "../utils";
 
 function extractNextContinuation(continuations: any[] | undefined): string | null {
@@ -16,20 +17,49 @@ function containsEditablePlaylistHeader(value: any): boolean {
   return Object.values(value).some(containsEditablePlaylistHeader);
 }
 
+function editableHeader(value: any): any | null {
+  if (value == null || typeof value !== "object") return null;
+  if (value.musicEditablePlaylistDetailHeaderRenderer) {
+    return value.musicEditablePlaylistDetailHeaderRenderer;
+  }
+  for (const child of Object.values(value)) {
+    const found = editableHeader(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findSetVideoId(value: any, videoId: string): string | null {
+  if (value == null || typeof value !== "object") return null;
+  if (typeof value.setVideoId === "string" && String(value.removedVideoId ?? "") === videoId) {
+    return value.setVideoId;
+  }
+  for (const child of Object.values(value)) {
+    const found = findSetVideoId(child, videoId);
+    if (found) return found;
+  }
+  return null;
+}
+
 export async function handlePlaylist(config: YouTubeMusicConfig, browseId: string): Promise<PlaylistDetail> {
   try {
     const actualBrowseId = browseId.startsWith("VL") ? browseId : `VL${browseId}`;
     const data = await ytFetch("browse", config, { browseId: actualBrowseId });
 
-    const headerRenderer = data?.header?.musicElementHeaderRenderer;
+    const editableRenderer = data?.header?.musicEditablePlaylistDetailHeaderRenderer;
+    const headerRenderer =
+      data?.header?.musicElementHeaderRenderer ?? editableRenderer?.header?.musicElementHeaderRenderer;
     const bgModel =
       headerRenderer?.elementRenderer?.elementRenderer?.newElement?.type?.componentType?.model
         ?.musicBlurredBackgroundHeaderModel;
     const hData = bgModel?.data ?? {};
+    const legacyEditableHeader = editableRenderer ?? editableHeader(data);
 
     const title =
       hData.title ??
       headerRenderer?.title?.runs?.[0]?.text ??
+      legacyEditableHeader?.header?.musicDetailHeaderRenderer?.title?.runs?.[0]?.text ??
+      legacyEditableHeader?.title?.runs?.[0]?.text ??
       (browseId === "VLLM" || browseId === "LM" ? "Liked Music" : "Playlist");
     const author = hData.straplineData?.textLine1?.content ?? null;
     const description = hData.description ?? null;
@@ -45,7 +75,7 @@ export async function handlePlaylist(config: YouTubeMusicConfig, browseId: strin
       data?.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer
         ?.contents ?? [];
 
-    const tracks: Track[] = [];
+    const entries: PlaylistEntry[] = [];
     let continuation: string | null = null;
     let shelfTrackCount: string | null = null;
 
@@ -56,7 +86,12 @@ export async function handlePlaylist(config: YouTubeMusicConfig, browseId: strin
           const renderer = item.musicTwoColumnItemRenderer ?? item.musicResponsiveListItemRenderer;
           if (renderer) {
             const track = parseTwoColumnTrack(renderer, thumbnailUrl);
-            if (track) tracks.push(track);
+            if (track) {
+              entries.push({
+                id: findSetVideoId(renderer, track.id) ?? `${actualBrowseId}:${entries.length}:${track.id}`,
+                track,
+              });
+            }
           }
         }
         continuation = extractNextContinuation(shelf.continuations);
@@ -76,21 +111,40 @@ export async function handlePlaylist(config: YouTubeMusicConfig, browseId: strin
         const listItem = model?.musicListItemWrapperModel?.musicListItemData;
         if (listItem) {
           const track = parseListItemTrack(listItem, thumbnailUrl);
-          if (track) tracks.push(track);
+          if (track) {
+            entries.push({
+              id: findSetVideoId(listItem, track.id) ?? `${actualBrowseId}:${entries.length}:${track.id}`,
+              track,
+            });
+          }
         }
       }
     }
 
+    const editable = containsEditablePlaylistHeader(data);
     const detail: PlaylistDetail = {
       id: browseId,
       title,
       author,
       description,
-      trackCount: trackCount ?? shelfTrackCount ?? (tracks.length > 0 ? `${tracks.length} songs` : null),
+      trackCount: trackCount ?? shelfTrackCount ?? (entries.length > 0 ? `${entries.length} songs` : null),
       thumbnailURL: thumbnailUrl,
-      tracks,
+      entries,
       continuation,
-      canEdit: containsEditablePlaylistHeader(data),
+      revision: playlistRevision(title, entries),
+      editCapabilities: editable
+        ? {
+            canRename: true,
+            canChangeArtwork: true,
+            canReorder: true,
+            canRemoveItems: true,
+          }
+        : {
+            canRename: false,
+            canChangeArtwork: false,
+            canReorder: false,
+            canRemoveItems: false,
+          },
     };
 
     return detail;
@@ -105,24 +159,29 @@ export async function handlePlaylistMore(
   config: YouTubeMusicConfig,
   browseId: string,
   continuation: string,
-): Promise<TrackPage> {
+): Promise<PlaylistEntryPage> {
   try {
     void browseId;
     const contData = await ytFetch("browse", config, { continuation });
     const contContents = contData?.continuationContents?.musicPlaylistShelfContinuation;
     if (!contContents) throw new AddonError("No continuation contents", 404);
 
-    const tracks: Track[] = [];
+    const entries: PlaylistEntry[] = [];
     for (const item of contContents.contents ?? []) {
       const renderer = item.musicTwoColumnItemRenderer ?? item.musicResponsiveListItemRenderer;
       if (renderer) {
         const track = parseTwoColumnTrack(renderer, null);
-        if (track) tracks.push(track);
+        if (track) {
+          entries.push({
+            id: findSetVideoId(renderer, track.id) ?? `${browseId}:${continuation}:${entries.length}:${track.id}`,
+            track,
+          });
+        }
       }
     }
 
     const nextContinuation = extractNextContinuation(contContents.continuations);
-    const page: TrackPage = { tracks, continuation: nextContinuation };
+    const page: PlaylistEntryPage = { entries, continuation: nextContinuation };
     return page;
   } catch (e: any) {
     console.error("Playlist more error:", e.message);
@@ -172,6 +231,7 @@ function parseTwoColumnTrack(renderer: any, fallbackThumb: string | null): Track
     durationSeconds,
     thumbnailURL: bestThumbnail(thumbnails) ?? fallbackThumb,
     isExplicit: false,
+    ...parseTrackMetadata(renderer),
   };
 }
 
@@ -213,5 +273,6 @@ function parseListItemTrack(listItem: any, fallbackThumb: string | null): Track 
     durationSeconds,
     thumbnailURL: bestThumbnail(thumbSources) ?? fallbackThumb,
     isExplicit: false,
+    ...parseTrackMetadata(listItem),
   };
 }

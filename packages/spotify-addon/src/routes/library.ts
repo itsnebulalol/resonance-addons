@@ -1,6 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
+import { transformGraphQLTrackItem } from "../track-mapping";
 import type { CatalogPage, HomeItem, HomeSection, SearchAlbum, SearchArtist, SearchPlaylist } from "../types";
-import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, transformGraphQLTrack, uriToId } from "../utils";
+import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, uriToId } from "../utils";
 
 type LibraryType = "playlists" | "songs" | "albums" | "artists";
 
@@ -74,6 +75,7 @@ function playlistItem(entry: any): HomeItem | null {
     trackCount: null,
     thumbnailURL: bestImageFromSources(flattenImageSources(playlistData?.images?.items)),
     canAddTracks: playlistData?.currentUserCapabilities?.canEditItems === true,
+    canDelete: playlistData?.currentUserCapabilities?.canEditItems === true,
   };
 
   return {
@@ -128,17 +130,8 @@ function artistItem(entry: any): HomeItem | null {
 }
 
 function songItem(entry: any): HomeItem | null {
-  const trackNode = entry?.track;
-  const trackData = trackNode?.data;
-  if (!trackData) return null;
-
-  const normalizedTrack = trackData?.uri ? trackData : { ...trackData, uri: trackNode?._uri };
-  if (!normalizedTrack?.uri) return null;
-
-  return {
-    type: "track",
-    track: transformGraphQLTrack(normalizedTrack),
-  };
+  const track = transformGraphQLTrackItem(entry);
+  return track ? { type: "track", track } : null;
 }
 
 async function playlistsSection(spDc: string, continuation?: string): Promise<HomeSection | null> {

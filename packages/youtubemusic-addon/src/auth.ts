@@ -15,6 +15,14 @@ export interface RegionContext {
 
 export const DEFAULT_REGION_CONTEXT: RegionContext = { gl: "US", hl: "en" };
 
+export function youtubeMusicClientHeaders(): Record<string, string> {
+  return {
+    "User-Agent": MOBILE_UA,
+    "X-Youtube-Client-Name": "26",
+    "X-Youtube-Client-Version": IOS_MUSIC_VERSION,
+  };
+}
+
 export function normalizeRegionContext(config: Pick<YouTubeMusicConfig, "gl" | "hl">): RegionContext {
   return {
     gl: config.gl?.trim().toUpperCase() || DEFAULT_REGION_CONTEXT.gl,

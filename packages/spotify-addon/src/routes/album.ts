@@ -1,40 +1,13 @@
 import { AddonError } from "@resonance-addons/sdk";
+import { transformGraphQLAlbumTrack } from "../track-mapping";
 import type { AlbumDetail, Track } from "../types";
-import { bestImageFromSources, formatTotalDuration, OperationHash, pf, transformGraphQLTrack, uriToId } from "../utils";
+import { bestImageFromSources, formatTotalDuration, OperationHash, pf, uriToId } from "../utils";
 
 function albumArtists(albumData: any): AlbumDetail["artists"] {
   return (albumData?.artists?.items ?? []).map((artist: any) => ({
     id: artist?.uri ? uriToId(artist.uri) : null,
     name: artist?.profile?.name ?? artist?.name ?? "",
   }));
-}
-
-function albumTrack(trackEntry: any, albumData: any, fallbackAlbumId: string): Track | null {
-  const rawTrack = trackEntry?.track ?? trackEntry;
-  if (!rawTrack?.uri) return null;
-
-  const normalizedTrack = rawTrack?.albumOfTrack
-    ? rawTrack
-    : {
-        ...rawTrack,
-        albumOfTrack: {
-          uri: albumData?.uri ?? `spotify:album:${fallbackAlbumId}`,
-          name: albumData?.name ?? "",
-          coverArt: albumData?.coverArt ?? null,
-        },
-      };
-
-  const mapped = transformGraphQLTrack(normalizedTrack);
-  const albumUri = (albumData?.uri as string | undefined) ?? `spotify:album:${fallbackAlbumId}`;
-
-  return {
-    ...mapped,
-    album: {
-      id: uriToId(albumUri),
-      name: albumData?.name ?? mapped.album?.name ?? "",
-    },
-    thumbnailURL: mapped.thumbnailURL ?? bestImageFromSources(albumData?.coverArt?.sources ?? []),
-  };
 }
 
 export async function handleAlbum(spDc: string, albumId: string): Promise<AlbumDetail> {
@@ -55,9 +28,10 @@ export async function handleAlbum(spDc: string, albumId: string): Promise<AlbumD
       throw new AddonError("Album not found", 404);
     }
 
-    const tracks = (albumData?.tracksV2?.items ?? [])
-      .map((item: any) => albumTrack(item, albumData, albumId))
+    const mappedTracks = (albumData?.tracksV2?.items ?? [])
+      .map((item: any) => transformGraphQLAlbumTrack(item, albumData, albumId))
       .filter((track: Track | null): track is Track => track != null);
+    const tracks = mappedTracks;
 
     return {
       id: uriToId(albumData.uri),

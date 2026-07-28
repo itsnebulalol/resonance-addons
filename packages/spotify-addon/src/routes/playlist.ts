@@ -1,6 +1,7 @@
-import { AddonError } from "@resonance-addons/sdk";
-import type { PlaylistDetail, Track, TrackPage } from "../types";
-import { bestImageFromSources, OperationHash, pf, transformGraphQLTrack, uriToId } from "../utils";
+import { AddonError, playlistRevision } from "@resonance-addons/sdk";
+import { transformGraphQLTrackItem } from "../track-mapping";
+import type { PlaylistDetail, PlaylistEntry, PlaylistEntryPage, Track } from "../types";
+import { bestImageFromSources, OperationHash, pf, uriToId } from "../utils";
 
 function parseOffset(continuation?: string): number {
   const parsed = Number.parseInt(continuation ?? "0", 10);
@@ -16,10 +17,10 @@ function flattenImageSources(items: any[] | undefined): any[] {
   return sources;
 }
 
-function playlistTrack(item: any): Track | null {
-  const trackData = item?.itemV2?.data;
-  if (!trackData?.uri || !String(trackData.uri).startsWith("spotify:track:")) return null;
-  return transformGraphQLTrack(trackData);
+function playlistEntry(item: any): PlaylistEntry | null {
+  const track = transformGraphQLTrackItem(item);
+  const id = item?.uid;
+  return track && id ? { id: String(id), track } : null;
 }
 
 function nextContinuation(totalCount: number | undefined, offset: number, rawItemCount: number): string | null {
@@ -49,17 +50,10 @@ async function fetchLikedSongs(spDc: string, offset: number): Promise<{ tracks: 
   });
   const tracksData = data?.me?.library?.tracks;
   const totalCount = tracksData?.totalCount ?? 0;
-  const tracks = (tracksData?.items ?? [])
-    .map((item: any) => {
-      const trackNode = item?.track;
-      const trackData = trackNode?.data;
-      if (!trackData) return null;
-      const normalized = trackData.uri ? trackData : { ...trackData, uri: trackNode?._uri };
-      if (!normalized?.uri) return null;
-      return transformGraphQLTrack(normalized);
-    })
+  const mappedTracks = (tracksData?.items ?? [])
+    .map((item: any) => transformGraphQLTrackItem(item))
     .filter((t: Track | null): t is Track => t != null);
-  return { tracks, totalCount };
+  return { tracks: mappedTracks, totalCount };
 }
 
 const LIKED_SONGS_IDS = new Set(["tracks", "collection:tracks", "your-episodes"]);
@@ -68,6 +62,7 @@ export async function handlePlaylist(spDc: string, playlistId: string): Promise<
   try {
     if (LIKED_SONGS_IDS.has(playlistId)) {
       const { tracks, totalCount } = await fetchLikedSongs(spDc, 0);
+      const entries = tracks.map((track, index) => ({ id: `liked:${index}:${track.id}`, track }));
       return {
         id: "tracks",
         title: "Liked Songs",
@@ -75,9 +70,15 @@ export async function handlePlaylist(spDc: string, playlistId: string): Promise<
         description: null,
         trackCount: `${totalCount} songs`,
         thumbnailURL: "https://misc.scdn.co/liked-songs/liked-songs-640.png",
-        tracks,
+        entries,
         continuation: tracks.length < totalCount ? String(tracks.length) : null,
-        canEdit: false,
+        revision: playlistRevision("Liked Songs", entries),
+        editCapabilities: {
+          canRename: false,
+          canChangeArtwork: false,
+          canReorder: false,
+          canRemoveItems: false,
+        },
       };
     }
 
@@ -88,9 +89,10 @@ export async function handlePlaylist(spDc: string, playlistId: string): Promise<
     }
 
     const rawItems = playlistData?.content?.items ?? [];
-    const tracks = rawItems
-      .map((item: any) => playlistTrack(item))
-      .filter((track: Track | null): track is Track => track != null);
+    const entries = rawItems
+      .map((item: any) => playlistEntry(item))
+      .filter((entry: PlaylistEntry | null): entry is PlaylistEntry => entry != null);
+    const editable = playlistData?.currentUserCapabilities?.canEditItems === true;
 
     return {
       id: uriToId(playlistData.uri),
@@ -100,13 +102,26 @@ export async function handlePlaylist(spDc: string, playlistId: string): Promise<
       trackCount:
         typeof playlistData?.content?.totalCount === "number"
           ? `${playlistData.content.totalCount} songs`
-          : tracks.length > 0
-            ? `${tracks.length} songs`
+          : entries.length > 0
+            ? `${entries.length} songs`
             : null,
       thumbnailURL: bestImageFromSources(flattenImageSources(playlistData?.images?.items)),
-      tracks,
+      entries,
       continuation: nextContinuation(playlistData?.content?.totalCount, 0, rawItems.length),
-      canEdit: playlistData?.currentUserCapabilities?.canEditItems === true,
+      revision: playlistRevision(playlistData?.name ?? "", entries),
+      editCapabilities: editable
+        ? {
+            canRename: false,
+            canChangeArtwork: true,
+            canReorder: true,
+            canRemoveItems: true,
+          }
+        : {
+            canRename: false,
+            canChangeArtwork: false,
+            canReorder: false,
+            canRemoveItems: false,
+          },
     };
   } catch (e: any) {
     if (e instanceof AddonError) throw e;
@@ -114,14 +129,21 @@ export async function handlePlaylist(spDc: string, playlistId: string): Promise<
   }
 }
 
-export async function handlePlaylistMore(spDc: string, playlistId: string, continuation: string): Promise<TrackPage> {
+export async function handlePlaylistMore(
+  spDc: string,
+  playlistId: string,
+  continuation: string,
+): Promise<PlaylistEntryPage> {
   try {
     const offset = parseOffset(continuation);
 
     if (LIKED_SONGS_IDS.has(playlistId)) {
       const { tracks, totalCount } = await fetchLikedSongs(spDc, offset);
       return {
-        tracks,
+        entries: tracks.map((track, index) => ({
+          id: `liked:${offset + index}:${track.id}`,
+          track,
+        })),
         continuation: offset + tracks.length < totalCount ? String(offset + tracks.length) : null,
       };
     }
@@ -129,12 +151,12 @@ export async function handlePlaylistMore(spDc: string, playlistId: string, conti
     const data = await fetchPlaylistPage(spDc, playlistId, offset);
     const playlistData = data?.playlistV2;
     const rawItems = playlistData?.content?.items ?? [];
-    const tracks = rawItems
-      .map((item: any) => playlistTrack(item))
-      .filter((track: Track | null): track is Track => track != null);
+    const entries = rawItems
+      .map((item: any) => playlistEntry(item))
+      .filter((entry: PlaylistEntry | null): entry is PlaylistEntry => entry != null);
 
     return {
-      tracks,
+      entries,
       continuation: nextContinuation(playlistData?.content?.totalCount, offset, rawItems.length),
     };
   } catch (e: any) {

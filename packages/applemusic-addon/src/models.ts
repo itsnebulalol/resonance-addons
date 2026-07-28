@@ -1,23 +1,24 @@
-export interface ArtistRef {
-  id: string | null;
-  name: string;
-}
-export interface AlbumRef {
-  id: string | null;
-  name: string;
-}
+import type {
+  AlbumRef as SDKAlbumRef,
+  ArtistRef as SDKArtistRef,
+  PlaylistArtworkUpdate as SDKPlaylistArtworkUpdate,
+  PlaylistDetail as SDKPlaylistDetail,
+  PlaylistEntry as SDKPlaylistEntry,
+  PlaylistEntryPage as SDKPlaylistEntryPage,
+  PlaylistUpdateRequest as SDKPlaylistUpdateRequest,
+  Station as SDKStation,
+  Track as SDKTrack,
+} from "@resonance-addons/sdk";
 
-export interface Track {
-  id: string;
-  provider: string;
-  title: string;
-  artists: ArtistRef[];
-  album: AlbumRef | null;
-  duration: string | null;
-  durationSeconds: number | null;
-  thumbnailURL: string | null;
-  isExplicit: boolean;
-}
+export type AlbumRef = SDKAlbumRef;
+export type ArtistRef = SDKArtistRef;
+export type Track = SDKTrack;
+export type Station = SDKStation;
+export type PlaylistEntry = SDKPlaylistEntry;
+export type PlaylistDetail = SDKPlaylistDetail;
+export type PlaylistEntryPage = SDKPlaylistEntryPage;
+export type PlaylistArtworkUpdate = SDKPlaylistArtworkUpdate;
+export type PlaylistUpdateRequest = SDKPlaylistUpdateRequest;
 
 export interface SearchAlbum {
   id: string;
@@ -45,10 +46,12 @@ export interface SearchPlaylist {
   trackCount: string | null;
   thumbnailURL: string | null;
   canAddTracks?: boolean | null;
+  canDelete?: boolean | null;
 }
 
 export type HomeItem =
   | { type: "track"; track: Track; playlistId?: string }
+  | { type: "station"; station: Station }
   | { type: "album"; album: SearchAlbum }
   | { type: "playlist"; playlist: SearchPlaylist }
   | { type: "artist"; artist: SearchArtist };
@@ -106,6 +109,9 @@ export interface QueueAction {
   id: string;
   title: string;
   isSelected: boolean;
+  allowsPrefetch?: boolean;
+  isMomentary?: boolean;
+  shouldAdvancePlayback?: boolean;
   payload: QueueActionPayload;
 }
 
@@ -137,18 +143,6 @@ export interface AlbumDetail {
   playlistId: string | null;
 }
 
-export interface PlaylistDetail {
-  id: string;
-  title: string;
-  author: string | null;
-  description: string | null;
-  trackCount: string | null;
-  thumbnailURL: string | null;
-  tracks: Track[];
-  continuation: string | null;
-  canEdit?: boolean | null;
-}
-
 export interface ArtistDetail {
   id: string;
   name: string;
@@ -159,9 +153,4 @@ export interface ArtistDetail {
   singles: SearchAlbum[];
   playlists: SearchPlaylist[];
   relatedArtists: SearchArtist[];
-}
-
-export interface TrackPage {
-  tracks: Track[];
-  continuation: string | null;
 }

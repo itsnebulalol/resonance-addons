@@ -87,28 +87,103 @@ export function msToDuration(ms?: number | null): string | null {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function stringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const values = value.map(nonEmptyString).filter((item): item is string => item !== null);
+  return values.length ? values : null;
+}
+
+function positiveInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function positiveNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function releaseYearOf(value: unknown): number | null {
+  const date = nonEmptyString(value);
+  if (!date) return null;
+  const match = /\b\d{4}\b/.exec(date);
+  if (!match) return null;
+  const year = Number(match[0]);
+  return year >= 1000 && year <= 9999 ? year : null;
+}
+
 function yearOf(dateStr?: string): string | null {
-  if (!dateStr) return null;
-  const m = /\b(19|20)\d{2}\b/.exec(dateStr);
-  return m ? m[0] : null;
+  const year = releaseYearOf(dateStr);
+  return year === null ? null : String(year);
+}
+
+function relationshipArtists(song: any, fallbackName: string | null): ArtistRef[] {
+  if (!Array.isArray(song?.relationships?.artists?.data)) return [];
+  const data = song.relationships.artists.data;
+  const artists = data.flatMap((artist: any) => {
+    const name = nonEmptyString(artist?.attributes?.name);
+    if (!name) return [];
+    return [{ id: artist?.id == null ? null : String(artist.id), name }];
+  });
+  if (artists.length || data.length !== 1 || !fallbackName) return artists;
+  return [{ id: data[0]?.id == null ? null : String(data[0].id), name: fallbackName }];
+}
+
+function namedArtist(name: string | null, candidates: ArtistRef[] = []): ArtistRef[] | null {
+  if (!name) return null;
+  const match = candidates.find((artist) => artist.name.localeCompare(name, undefined, { sensitivity: "base" }) === 0);
+  return [{ id: match?.id ?? null, name }];
+}
+
+interface SongTrackContext {
+  album?: any;
 }
 
 /** Catalog `songs` OR `library-songs` -> Track. */
-export function songToTrack(song: any): Track {
+export function songToTrack(song: any, context: SongTrackContext = {}): Track {
   const a = song?.attributes ?? {};
   const catalogId: string = a.playParams?.catalogId ?? (song.type === "library-songs" ? "" : song.id);
   const id = catalogId || song.id;
-  const albumId = song?.relationships?.albums?.data?.[0]?.id ?? a.playParams?.purchasedId ?? null;
+  const relatedAlbum = song?.relationships?.albums?.data?.[0] ?? null;
+  const albumAttributes = { ...(context.album?.attributes ?? {}), ...(relatedAlbum?.attributes ?? {}) };
+  const albumId = relatedAlbum?.id ?? context.album?.id ?? a.playParams?.purchasedId ?? null;
+  const albumName = nonEmptyString(a.albumName) ?? nonEmptyString(albumAttributes.name);
+  const artistName = nonEmptyString(a.artistName);
+  const includedArtists = relationshipArtists(song, artistName);
+  const artists = includedArtists.length ? includedArtists : (namedArtist(artistName) ?? []);
+  const albumArtists = namedArtist(
+    nonEmptyString(a.albumArtistName) ?? nonEmptyString(albumAttributes.artistName),
+    includedArtists,
+  );
+  const genres = stringList(a.genreNames) ?? stringList(albumAttributes.genreNames);
+  const releaseYear = releaseYearOf(a.releaseDate) ?? releaseYearOf(albumAttributes.releaseDate);
+  const trackNumber = positiveInteger(a.trackNumber);
+  const trackTotal = positiveInteger(a.trackCount) ?? positiveInteger(albumAttributes.trackCount);
+  const discNumber = positiveInteger(a.discNumber);
+  const discTotal = positiveInteger(a.discCount) ?? positiveInteger(albumAttributes.discCount);
+  const bpm = positiveNumber(a.bpm) ?? positiveNumber(a.beatsPerMinute);
+  const musicalKey = nonEmptyString(a.musicalKey) ?? nonEmptyString(a.keySignature);
   return {
     id: String(id),
     provider: PROVIDER_ID,
     title: a.name ?? "",
-    artists: a.artistName ? [{ id: null, name: a.artistName }] : [],
-    album: a.albumName ? { id: albumId, name: a.albumName } : null,
+    artists,
+    album: albumName ? { id: albumId == null ? null : String(albumId), name: albumName } : null,
     duration: msToDuration(a.durationInMillis),
     durationSeconds: a.durationInMillis ? Math.round(a.durationInMillis / 1000) : null,
     thumbnailURL: artworkURL(a.artwork),
     isExplicit: a.contentRating === "explicit",
+    ...(genres ? { genres } : {}),
+    ...(releaseYear !== null ? { releaseYear } : {}),
+    ...(albumArtists ? { albumArtists } : {}),
+    ...(trackNumber !== null ? { trackNumber } : {}),
+    ...(trackTotal !== null ? { trackTotal } : {}),
+    ...(discNumber !== null ? { discNumber } : {}),
+    ...(discTotal !== null ? { discTotal } : {}),
+    ...(bpm !== null ? { bpm } : {}),
+    ...(musicalKey ? { musicalKey } : {}),
   };
 }
 
@@ -136,6 +211,7 @@ export function playlistToSearch(pl: any): SearchPlaylist {
     trackCount: a.trackCount ? `${a.trackCount} songs` : null,
     thumbnailURL: artworkURL(a.artwork),
     canAddTracks: a.canEdit == null ? null : a.canEdit === true,
+    canDelete: a.canEdit == null ? null : a.canEdit === true,
   };
 }
 
@@ -157,6 +233,19 @@ export function resourceToHomeItem(r: any): import("./models").HomeItem | null {
   if (t === "albums" || t === "library-albums") return { type: "album", album: albumToSearch(r) };
   if (t === "playlists" || t === "library-playlists") return { type: "playlist", playlist: playlistToSearch(r) };
   if (t === "artists" || t === "library-artists") return { type: "artist", artist: artistToSearch(r) };
+  if (t === "stations") {
+    const a = r?.attributes ?? {};
+    return {
+      type: "station",
+      station: {
+        id: String(r.id),
+        provider: PROVIDER_ID,
+        title: a.name ?? "Station",
+        subtitle: a.stationProviderName ?? "Station",
+        thumbnailURL: artworkURL(a.artwork),
+      },
+    };
+  }
   return null;
 }
 
@@ -175,7 +264,7 @@ export async function radioNextTracks(stationId: string, limit = 10): Promise<Tr
   const n = Math.max(1, Math.min(limit, 10));
   const r = await ampSend("POST", `/v1/me/stations/next-tracks/${stationId}?limit=${n}`);
   if (!r.ok) return [];
-  return ((r.json?.data ?? []) as any[]).map(songToTrack);
+  return ((r.json?.data ?? []) as any[]).map((song) => songToTrack(song));
 }
 
 /** The continuous-play station id for a catalog song */

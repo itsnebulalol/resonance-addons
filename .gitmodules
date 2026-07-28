@@ -1,0 +1,3 @@
+[submodule "servers"]
+	path = servers
+	url = ssh://git@github.com/itsnebulalol/resonance-servers

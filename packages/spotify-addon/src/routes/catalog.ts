@@ -1,6 +1,7 @@
 import { AddonError } from "@resonance-addons/sdk";
+import { transformGraphQLTrackItem } from "../track-mapping";
 import type { CatalogPage, HomeItem, HomeSection, SearchAlbum, SearchArtist, SearchPlaylist } from "../types";
-import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, transformGraphQLTrack, uriToId } from "../utils";
+import { bestImageFromSources, OperationHash, PROVIDER_ID, pf, uriToId } from "../utils";
 
 const SKIP_TYPENAMES = new Set([
   "PodcastOrAudiobookResponseWrapper",
@@ -11,6 +12,7 @@ const SKIP_TYPENAMES = new Set([
 ]);
 
 const SKIP_URI_PREFIXES = ["spotify:show:", "spotify:episode:", "spotify:audiobook:"];
+const DJ_URI = "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
 
 function isSkippableItem(uri: string, typename?: string): boolean {
   if (typename && SKIP_TYPENAMES.has(typename)) return true;
@@ -41,6 +43,19 @@ function parseHomeItem(item: any): HomeItem | null {
       thumbnailURL: "https://misc.scdn.co/liked-songs/liked-songs-640.png",
     };
     return { type: "playlist", playlist };
+  }
+
+  if (uri === DJ_URI) {
+    return {
+      type: "station",
+      station: {
+        id: "_dj",
+        provider: PROVIDER_ID,
+        title: contentData.name ?? "DJ",
+        subtitle: "Station",
+        thumbnailURL: bestImageFromSources(flattenImageSources(contentData.images?.items)),
+      },
+    };
   }
 
   const wrapperType = contentWrapper?.__typename as string | undefined;
@@ -89,7 +104,8 @@ function parseHomeItem(item: any): HomeItem | null {
 
   if (innerType === "Track" || uri.includes(":track:")) {
     if (!contentData.uri && uri) contentData.uri = uri;
-    return { type: "track", track: transformGraphQLTrack(contentData) };
+    const track = transformGraphQLTrackItem(contentData);
+    return track ? { type: "track", track } : null;
   }
 
   return null;
@@ -169,7 +185,12 @@ export async function handleHome(spDc: string): Promise<CatalogPage> {
       if (section) sections.push(section);
     }
 
-    return { sections, filters: [], quickAccess: null, continuation: null };
+    return {
+      sections,
+      filters: [],
+      quickAccess: null,
+      continuation: null,
+    };
   } catch (e: any) {
     if (e instanceof AddonError) throw e;
     throw new AddonError(e?.message ?? "Failed to load Spotify home", 500);

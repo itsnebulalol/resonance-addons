@@ -35,6 +35,7 @@ function validateCapabilities(manifest: Record<string, any>, handlers: Record<st
   const requiredHandlers: Array<[string, string]> = [
     ["supportsAddToPlaylist", "addToPlaylist"],
     ["supportsCreatePlaylist", "createPlaylist"],
+    ["supportsEditPlaylist", "updatePlaylist"],
     ["supportsRemoveFromPlaylist", "removeFromPlaylist"],
   ];
   for (const [capability, handler] of requiredHandlers) {

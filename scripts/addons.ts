@@ -4,7 +4,7 @@ export const ADDONS = [
     outputName: "youtubemusic",
     id: "net.itsnebula.youtubemusic",
     name: "YouTube Music",
-    version: "2.0.0",
+    version: "2.3.0",
     description: "Stream, browse, search, manage your library, and sync listening history with YouTube Music",
   },
   {
@@ -12,7 +12,7 @@ export const ADDONS = [
     outputName: "spotify",
     id: "net.itsnebula.spotify",
     name: "Spotify",
-    version: "2.0.0",
+    version: "2.3.5",
     description: "Stream, browse, search, manage your library, and sync listening history with Spotify",
   },
   {
@@ -20,7 +20,7 @@ export const ADDONS = [
     outputName: "applemusic",
     id: "net.itsnebula.applemusic",
     name: "Apple Music",
-    version: "2.0.0",
+    version: "2.3.0",
     description: "Stream, browse, search, manage your library, and sync listening history with Apple Music",
   },
   {
@@ -36,7 +36,7 @@ export const ADDONS = [
     outputName: "soundcloud",
     id: "net.itsnebula.soundcloud",
     name: "SoundCloud",
-    version: "2.0.0",
+    version: "2.2.0",
     description: "Stream, browse, search, manage your library, and sync listening history with SoundCloud",
   },
 ] as const;

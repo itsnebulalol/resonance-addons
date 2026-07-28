@@ -10,6 +10,10 @@ const tokenCache = new Map<string, { token: string; expires: number }>();
 const pendingTokens = new Map<string, Promise<string>>();
 const responseCache = new Map<string, CachedDelegatedResponse>();
 
+export function invalidateSpotifyResponseCache(): void {
+  responseCache.clear();
+}
+
 let cachedSecret: { secret: Buffer; version: number; expiresAt: number } | null = null;
 let pendingSecret: Promise<{ secret: Buffer; version: number }> | null = null;
 

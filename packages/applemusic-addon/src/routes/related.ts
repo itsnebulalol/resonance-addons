@@ -9,7 +9,7 @@ export async function handleRelated(browseId: string): Promise<Track[]> {
   const sf = await getStorefront();
   try {
     const d = await ampGet(`/v1/catalog/${sf}/artists/${browseId}/view/top-songs`, { limit: 25 });
-    return (d?.data ?? []).map(songToTrack);
+    return (d?.data ?? []).map((song: any) => songToTrack(song));
   } catch (e: any) {
     console.error("[related] failed:", e.message);
     return [];
@@ -28,7 +28,7 @@ export async function handleRelatedForTrack(trackId: string): Promise<Track[]> {
     const artistId = sd?.data?.[0]?.relationships?.artists?.data?.[0]?.id;
     if (!artistId) return [];
     const d = await ampGet(`/v1/catalog/${sf}/artists/${artistId}/view/top-songs`, { limit: 25 });
-    return (d?.data ?? []).map(songToTrack).filter((t: Track) => t.id !== trackId);
+    return (d?.data ?? []).map((song: any) => songToTrack(song)).filter((t: Track) => t.id !== trackId);
   } catch (e: any) {
     console.error("[related] for-track failed:", e.message);
     return [];

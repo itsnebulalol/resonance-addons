@@ -1,5 +1,6 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
+import { parseTrackMetadata } from "../track-metadata";
 import type { Track, YouTubeMusicConfig } from "../types";
 import { bestThumbnail, PROVIDER_ID } from "../utils";
 
@@ -104,5 +105,6 @@ function parseIOSRelatedItem(item: any): Track | null {
     durationSeconds: null,
     thumbnailURL,
     isExplicit: false,
+    ...parseTrackMetadata(item),
   };
 }

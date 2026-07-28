@@ -1,5 +1,5 @@
 import { type PathfinderOperation, pathfinderRequest } from "./auth";
-import type { ArtistRef, Track } from "./types";
+import type { Track } from "./types";
 
 export const PROVIDER_ID = "net.itsnebula.spotify";
 
@@ -56,42 +56,6 @@ export function formatTotalDuration(tracks: Track[]): string | null {
   const mins = Math.floor((totalSec % 3600) / 60);
   if (hours > 0) return `${hours} hr ${mins} min`;
   return `${mins} min`;
-}
-
-export function transformGraphQLTrack(trackData: any): Track {
-  const uri = trackData.uri as string | undefined;
-  const id = uri ? uriToId(uri) : (trackData.id ?? "");
-
-  const artistsData = trackData.artists ?? trackData.firstArtist;
-  const artists: ArtistRef[] = (artistsData?.items ?? []).map((a: any) => ({
-    id: a.uri ? uriToId(a.uri) : null,
-    name: a.profile?.name ?? a.name ?? "",
-  }));
-
-  const albumData = trackData.albumOfTrack;
-  const album = albumData
-    ? {
-        id: albumData.uri ? uriToId(albumData.uri) : null,
-        name: albumData.name ?? "",
-      }
-    : null;
-
-  const durationMs = trackData.trackDuration?.totalMilliseconds ?? trackData.duration?.totalMilliseconds ?? 0;
-  const isExplicit = trackData.contentRating?.label === "EXPLICIT";
-  const coverSources = albumData?.coverArt?.sources ?? [];
-  const thumbnailURL = bestImageFromSources(coverSources);
-
-  return {
-    id,
-    provider: PROVIDER_ID,
-    title: trackData.name ?? "",
-    artists,
-    album,
-    duration: durationMs > 0 ? formatDurationMs(durationMs) : null,
-    durationSeconds: durationMs > 0 ? Math.round(durationMs / 1000) : null,
-    thumbnailURL,
-    isExplicit,
-  };
 }
 
 export async function pf(spDc: string, op: PathfinderOperation): Promise<any> {

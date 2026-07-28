@@ -8,9 +8,12 @@ import { handleMetadata } from "./routes/metadata";
 import {
   handleAddToPlaylist,
   handleCreatePlaylist,
+  handleDeletePlaylist,
+  handleFavoriteCollection,
   handleGetLikeStatus,
   handleLike,
-  handleRemoveFromPlaylist,
+  handleRemovePlaylistEntry,
+  handleUpdatePlaylist,
 } from "./routes/mutations";
 import { handleQueueMore, handleQueueStart } from "./routes/queue";
 import { handleRelated, handleRelatedForTrack } from "./routes/related";
@@ -21,7 +24,7 @@ export const addon = defineAddon<SoundCloudConfig>({
   id: PROVIDER_ID,
   name: "SoundCloud",
   description: "Stream, browse, search, manage your library, and sync listening history with SoundCloud",
-  version: "2.0.0",
+  version: "2.2.0",
   icon: {
     type: "remote",
     value: "https://cdn-icons-png.flaticon.com/512/48/48967.png",
@@ -40,13 +43,21 @@ export const addon = defineAddon<SoundCloudConfig>({
   ],
   auth: {
     type: "token",
-    label: "Enter your SoundCloud oauth_token cookie to enable library, likes, and history. This field is optional.",
+    label:
+      "Enter your SoundCloud oauth_token cookie for library and history access. Changing likes also requires the current datadome cookie. Both fields are optional.",
     fields: [
       {
         key: "oauthToken",
         type: "password",
         title: "SoundCloud oauth_token Cookie",
         placeholder: "Paste the oauth_token cookie value",
+        isRequired: false,
+      },
+      {
+        key: "datadome",
+        type: "password",
+        title: "SoundCloud datadome Cookie",
+        placeholder: "Paste the datadome cookie value to enable like changes",
         isRequired: false,
       },
     ],
@@ -65,7 +76,7 @@ export const addon = defineAddon<SoundCloudConfig>({
     searchSuggestions: (config: SoundCloudConfig, query: string) => handleSearchSuggestions(config, query),
     getAlbumDetail: (config: SoundCloudConfig, id: string) => handleAlbum(config, id),
     getPlaylistDetail: (config: SoundCloudConfig, id: string) => handlePlaylist(config, id),
-    loadMorePlaylistTracks: (config: SoundCloudConfig, id: string, continuation: string) =>
+    loadMorePlaylistEntries: (config: SoundCloudConfig, id: string, continuation: string) =>
       handlePlaylistMore(config, id, continuation),
     getArtistDetail: (config: SoundCloudConfig, id: string) => handleArtist(config, id),
     startQueue: (config: SoundCloudConfig, trackId: string, context?: any) =>
@@ -76,11 +87,14 @@ export const addon = defineAddon<SoundCloudConfig>({
     setLikeStatus: (config: SoundCloudConfig, status: string, trackId: string) =>
       handleLike(config, status as "liked" | "disliked" | "none", trackId).then(() => {}),
     getLikeStatus: (config: SoundCloudConfig, trackId: string) => handleGetLikeStatus(config, trackId),
+    getFavoriteCollection: () => handleFavoriteCollection(),
     addToPlaylist: (config: SoundCloudConfig, trackId: string, playlistId: string) =>
       handleAddToPlaylist(config, trackId, playlistId),
     createPlaylist: (config: SoundCloudConfig, name: string) => handleCreatePlaylist(config, name),
-    removeFromPlaylist: (config: SoundCloudConfig, trackId: string, playlistId: string) =>
-      handleRemoveFromPlaylist(config, trackId, playlistId),
+    updatePlaylist: (config: SoundCloudConfig, request) => handleUpdatePlaylist(config, request),
+    removeFromPlaylist: (config: SoundCloudConfig, entryId: string, trackId: string, playlistId: string) =>
+      handleRemovePlaylistEntry(config, entryId, trackId, playlistId),
+    deletePlaylist: (config: SoundCloudConfig, playlistId: string) => handleDeletePlaylist(config, playlistId),
     fetchMetadata: (
       config: SoundCloudConfig,
       title?: string,
@@ -97,7 +111,9 @@ export const addon = defineAddon<SoundCloudConfig>({
     supportsLikeStatus: true,
     supportsAddToPlaylist: true,
     supportsCreatePlaylist: true,
+    supportsEditPlaylist: true,
     supportsRemoveFromPlaylist: true,
+    supportsDeletePlaylist: true,
     supportsFilters: true,
     supportsQuickAccess: false,
     supportsRelated: true,

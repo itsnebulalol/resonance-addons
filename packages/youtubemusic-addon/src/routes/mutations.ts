@@ -1,10 +1,145 @@
 import { AddonError } from "@resonance-addons/sdk";
-import { invalidateResponseCache, ytFetch } from "../auth";
-import type { SearchPlaylist, YouTubeMusicConfig } from "../types";
+import { invalidateResponseCache, mintAccessToken, youtubeMusicClientHeaders, ytFetch } from "../auth";
+import type {
+  PlaylistDetail,
+  PlaylistEntry,
+  PlaylistUpdateRequest,
+  SearchPlaylist,
+  YouTubeMusicConfig,
+} from "../types";
 import { PROVIDER_ID } from "../utils";
+import { handlePlaylist, handlePlaylistMore } from "./playlist";
+
+const PLAYLIST_IMAGE_UPLOAD_URL = "https://music.youtube.com/playlist_image_upload/playlist_custom_thumbnail";
+const MAX_PLAYLIST_ARTWORK_BYTES = 2 * 1024 * 1024;
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export function playlistArtworkBytes(dataBase64: string, mimeType: string): Buffer {
+  const normalizedMIMEType = mimeType.trim().toLowerCase();
+  if (normalizedMIMEType !== "image/jpeg" && normalizedMIMEType !== "image/png") {
+    throw new AddonError("YouTube Music playlist artwork must be JPEG or PNG.", 400);
+  }
+  const bytes = Buffer.from(dataBase64, "base64");
+  if (bytes.length === 0) {
+    throw new AddonError("Playlist artwork is empty.", 400);
+  }
+  if (bytes.length > MAX_PLAYLIST_ARTWORK_BYTES) {
+    throw new AddonError("YouTube Music playlist artwork must be 2 MB or smaller.", 400);
+  }
+  return bytes;
+}
+
+export function playlistArtworkAction(encryptedBlobId: string): Record<string, unknown> {
+  return {
+    action: "ACTION_SET_CUSTOM_THUMBNAIL",
+    addedCustomThumbnail: {
+      imageKey: {
+        name: "studio_square_thumbnail",
+        type: "PLAYLIST_IMAGE_TYPE_CUSTOM_THUMBNAIL",
+      },
+      playlistScottyEncryptedBlobId: encryptedBlobId,
+    },
+  };
+}
+
+async function playlistArtworkRequest(
+  accessToken: string,
+  url: string,
+  init: RequestInit,
+  operation: string,
+): Promise<Response> {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Origin: "https://music.youtube.com",
+      Referer: "https://music.youtube.com/",
+      ...youtubeMusicClientHeaders(),
+      ...(init.headers ?? {}),
+    },
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new AddonError(
+      `YouTube Music playlist artwork ${operation} failed (${response.status}): ${text.slice(0, 300)}`,
+      response.status,
+    );
+  }
+  return response;
+}
+
+async function uploadPlaylistArtwork(
+  config: YouTubeMusicConfig,
+  playlistId: string,
+  artwork: NonNullable<PlaylistUpdateRequest["artwork"]>,
+): Promise<void> {
+  const mimeType = artwork.mimeType.trim().toLowerCase();
+  const bytes = playlistArtworkBytes(artwork.data, mimeType);
+  const accessToken = await mintAccessToken(config.refreshToken);
+  const startResponse = await playlistArtworkRequest(
+    accessToken,
+    PLAYLIST_IMAGE_UPLOAD_URL,
+    {
+      method: "POST",
+      headers: {
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Header-Content-Length": String(bytes.length),
+      },
+    },
+    "session start",
+  );
+  const uploadURL = startResponse.headers.get("x-goog-upload-url");
+  if (!uploadURL) {
+    throw new AddonError("YouTube Music did not return a playlist artwork upload URL.", 500);
+  }
+
+  const uploadResponse = await playlistArtworkRequest(
+    accessToken,
+    uploadURL,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": mimeType,
+        "Content-Length": String(bytes.length),
+        "X-Goog-Upload-Command": "upload, finalize",
+        "X-Goog-Upload-Offset": "0",
+      },
+      body: bytes,
+    },
+    "upload",
+  );
+  const uploadData = (await uploadResponse.json()) as { encryptedBlobId?: string };
+  if (!uploadData.encryptedBlobId) {
+    throw new AddonError("YouTube Music did not return an encrypted playlist artwork ID.", 500);
+  }
+
+  await editPlaylistWithRetries(config, playlistId, [playlistArtworkAction(uploadData.encryptedBlobId)]);
+}
+
+async function editPlaylistWithRetries(config: YouTubeMusicConfig, playlistId: string, actions: any[]): Promise<void> {
+  let lastError: any;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      await ytFetch("browse/edit_playlist", config, {
+        playlistId,
+        actions,
+      });
+      invalidateResponseCache(config.refreshToken);
+      return;
+    } catch (error: any) {
+      lastError = error;
+      if (!String(error?.message ?? error).includes("(409)") || attempt === 3) {
+        throw error;
+      }
+      invalidateResponseCache(config.refreshToken);
+      await sleep(600 * 2 ** attempt);
+    }
+  }
+  throw lastError;
 }
 
 function findSetVideoId(value: any, videoId: string): string | null {
@@ -92,6 +227,19 @@ export async function handleGetLikeStatus(
   }
 }
 
+export async function handleFavoriteCollection(): Promise<SearchPlaylist> {
+  return {
+    id: "LM",
+    provider: PROVIDER_ID,
+    title: "Liked Music",
+    author: null,
+    trackCount: null,
+    thumbnailURL: null,
+    canAddTracks: false,
+    canDelete: false,
+  };
+}
+
 export async function handleAddToPlaylist(
   config: YouTubeMusicConfig,
   body: { videoId: string; playlistId: string },
@@ -156,6 +304,7 @@ export async function handleCreatePlaylist(config: YouTubeMusicConfig, name: str
     trackCount: "0 songs",
     thumbnailURL: null,
     canAddTracks: true,
+    canDelete: true,
   };
 }
 
@@ -183,6 +332,97 @@ export async function handleRemoveFromPlaylist(
     ],
   });
   invalidateResponseCache(config.refreshToken);
+}
+
+export async function handleRemovePlaylistEntry(
+  config: YouTubeMusicConfig,
+  entryId: string,
+  trackId: string,
+  rawPlaylistId: string,
+): Promise<void> {
+  const playlistId = rawPlaylistId.startsWith("VL") ? rawPlaylistId.slice(2) : rawPlaylistId;
+  await ytFetch("browse/edit_playlist", config, {
+    playlistId,
+    actions: [
+      {
+        action: "ACTION_REMOVE_VIDEO",
+        removedVideoId: trackId,
+        setVideoId: entryId,
+      },
+    ],
+  });
+  invalidateResponseCache(config.refreshToken);
+}
+
+async function loadAllPlaylistEntries(
+  config: YouTubeMusicConfig,
+  playlistId: string,
+): Promise<{ title: string; entries: PlaylistEntry[] }> {
+  const detail = await handlePlaylist(config, playlistId);
+  const entries = [...detail.entries];
+  let continuation = detail.continuation;
+  while (continuation) {
+    const page = await handlePlaylistMore(config, playlistId, continuation);
+    entries.push(...page.entries);
+    continuation = page.continuation;
+  }
+  return { title: detail.title, entries };
+}
+
+export async function handleUpdatePlaylist(
+  config: YouTubeMusicConfig,
+  request: PlaylistUpdateRequest,
+): Promise<PlaylistDetail> {
+  const playlistId = request.playlistID.startsWith("VL") ? request.playlistID.slice(2) : request.playlistID;
+  const currentDetail = await handlePlaylist(config, request.playlistID);
+  if (request.revision && currentDetail.revision !== request.revision) {
+    throw new AddonError("The playlist changed on another device. Reload it and try again.", 409);
+  }
+  const current = await loadAllPlaylistEntries(config, request.playlistID);
+
+  const requestedIDs = new Set(request.entries.map((entry) => entry.id));
+  const removed = current.entries.filter((entry) => !requestedIDs.has(entry.id));
+  if (removed.length > 0) {
+    await editPlaylistWithRetries(
+      config,
+      playlistId,
+      removed.map((entry) => ({
+        action: "ACTION_REMOVE_VIDEO",
+        removedVideoId: entry.track.id,
+        setVideoId: entry.id,
+      })),
+    );
+  }
+  if (request.name !== current.title) {
+    await editPlaylistWithRetries(config, playlistId, [
+      {
+        action: "ACTION_SET_PLAYLIST_NAME",
+        playlistName: request.name,
+      },
+    ]);
+  }
+  for (const entry of request.entries) {
+    await editPlaylistWithRetries(config, playlistId, [
+      {
+        action: "ACTION_MOVE_VIDEO_BEFORE",
+        setVideoId: entry.id,
+      },
+    ]);
+    await sleep(150);
+  }
+  if (request.artwork) {
+    await uploadPlaylistArtwork(config, playlistId, request.artwork);
+  }
+  invalidateResponseCache(config.refreshToken);
+  let latest = await handlePlaylist(config, request.playlistID);
+  if (request.artwork) {
+    for (let attempt = 0; attempt < 8 && latest.thumbnailURL === currentDetail.thumbnailURL; attempt++) {
+      await sleep(500);
+      invalidateResponseCache(config.refreshToken);
+      latest = await handlePlaylist(config, request.playlistID);
+    }
+  }
+  return latest;
 }
 
 export async function handleDeletePlaylist(config: YouTubeMusicConfig, rawPlaylistId: string): Promise<void> {

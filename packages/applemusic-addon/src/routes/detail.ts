@@ -1,7 +1,33 @@
+import { playlistRevision } from "@resonance-addons/sdk";
 import { albumToSearch, ampGet, artistToSearch, artworkURL, getStorefront, msToDuration, songToTrack } from "../api";
-import type { AlbumDetail, ArtistDetail, PlaylistDetail, SearchAlbum, SearchArtist, Track, TrackPage } from "../models";
+import type {
+  AlbumDetail,
+  ArtistDetail,
+  PlaylistDetail,
+  PlaylistEntry,
+  PlaylistEntryPage,
+  SearchAlbum,
+  SearchArtist,
+  Track,
+} from "../models";
 
 const isLib = (id: string, prefix: string) => id.startsWith(prefix);
+
+function entryOffset(url: string | null | undefined): number {
+  if (!url) return 0;
+  try {
+    return Number.parseInt(new URL(url, "https://amp-api.music.apple.com").searchParams.get("offset") ?? "0", 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function playlistEntries(items: any[], offset: number): PlaylistEntry[] {
+  return items.map((song, index) => ({
+    id: `${String(song.id)}@${offset + index}`,
+    track: songToTrack(song),
+  }));
+}
 
 // ---------- Album ----------
 export async function handleAlbum(id: string): Promise<AlbumDetail> {
@@ -11,7 +37,7 @@ export async function handleAlbum(id: string): Promise<AlbumDetail> {
   const album = d?.data?.[0];
   if (!album) throw new Error(`album ${id} not found`);
   const a = album.attributes ?? {};
-  const tracks: Track[] = (album.relationships?.tracks?.data ?? []).map(songToTrack);
+  const tracks: Track[] = (album.relationships?.tracks?.data ?? []).map((song: any) => songToTrack(song, { album }));
   const totalMs = tracks.reduce((sum, t) => sum + (t.durationSeconds ?? 0) * 1000, 0);
   return {
     id: String(album.id),
@@ -35,7 +61,8 @@ export async function handlePlaylist(id: string): Promise<PlaylistDetail> {
   if (!pl) throw new Error(`playlist ${id} not found`);
   const a = pl.attributes ?? {};
   const trackRel = pl.relationships?.tracks ?? {};
-  const tracks: Track[] = (trackRel.data ?? []).map(songToTrack);
+  const entries = playlistEntries(trackRel.data ?? [], 0);
+  const editable = a.canEdit === true;
   return {
     id: String(pl.id),
     title: a.name ?? "",
@@ -43,16 +70,31 @@ export async function handlePlaylist(id: string): Promise<PlaylistDetail> {
     description: a.description?.standard ?? a.description?.short ?? null,
     trackCount: a.trackCount ? `${a.trackCount} songs` : null,
     thumbnailURL: artworkURL(a.artwork, 1200),
-    tracks,
+    entries,
     continuation: trackRel.next ?? null,
-    canEdit: a.canEdit === true,
+    revision: playlistRevision(a.name ?? "", entries),
+    editCapabilities: editable
+      ? {
+          canRename: true,
+          canChangeArtwork: false,
+          canReorder: true,
+          canRemoveItems: true,
+        }
+      : {
+          canRename: false,
+          canChangeArtwork: false,
+          canReorder: false,
+          canRemoveItems: false,
+        },
   };
 }
 
-export async function handlePlaylistMore(_id: string, continuation: string): Promise<TrackPage> {
+export async function handlePlaylistMore(_id: string, continuation: string): Promise<PlaylistEntryPage> {
   const d = await ampGet(continuation);
-  const tracks: Track[] = (d?.data ?? []).map(songToTrack);
-  return { tracks, continuation: d?.next ?? null };
+  return {
+    entries: playlistEntries(d?.data ?? [], entryOffset(continuation)),
+    continuation: d?.next ?? null,
+  };
 }
 
 // ---------- Artist ----------
@@ -95,7 +137,7 @@ export async function handleArtist(id: string): Promise<ArtistDetail> {
   const a = ar.attributes ?? {};
   const views = ar.views ?? {};
 
-  const topTracks: Track[] = (views["top-songs"]?.data ?? []).map(songToTrack);
+  const topTracks: Track[] = (views["top-songs"]?.data ?? []).map((song: any) => songToTrack(song));
   const allAlbums = (views["full-albums"]?.data ?? []) as any[];
   const albums: SearchAlbum[] = [];
   const singles: SearchAlbum[] = [];

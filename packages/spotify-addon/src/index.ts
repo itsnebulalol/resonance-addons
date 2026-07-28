@@ -1,4 +1,5 @@
 import { defineAddon } from "@resonance-addons/sdk";
+import { continueDJQueue, startDJQueue, switchDJQueue } from "./dj";
 import { handleAlbum } from "./routes/album";
 import { handleArtist } from "./routes/artist";
 import { handleHome } from "./routes/catalog";
@@ -9,9 +10,12 @@ import { handleMetadata } from "./routes/metadata";
 import {
   handleAddToPlaylist,
   handleCreatePlaylist,
+  handleDeletePlaylist,
+  handleFavoriteCollection,
   handleGetLikeStatus,
-  handleRemoveFromPlaylist,
+  handleRemovePlaylistEntry,
   handleSetLikeStatus,
+  handleUpdatePlaylist,
 } from "./routes/mutations";
 import { handlePlaylist, handlePlaylistMore } from "./routes/playlist";
 import { handleQueueMore, handleQueueStart } from "./routes/queue";
@@ -22,14 +26,15 @@ import { PROVIDER_ID } from "./utils";
 
 interface SpotifyConfig {
   spDc: string;
-  wvdUrl?: string;
+  serverToken: string;
+  serverUrl: string;
 }
 
 export const addon = defineAddon<SpotifyConfig>({
   id: PROVIDER_ID,
   name: "Spotify",
   description: "Stream, browse, search, manage your library, and sync listening history with Spotify",
-  version: "2.0.0",
+  version: "2.3.5",
   icon: {
     type: "remote",
     value: "https://storage.googleapis.com/pr-newsroom-wp/1/2023/05/Spotify_Primary_Logo_RGB_Green.png",
@@ -50,7 +55,7 @@ export const addon = defineAddon<SpotifyConfig>({
   ],
   auth: {
     type: "token",
-    label: "Enter your Spotify sp_dc cookie. The Widevine key URL is optional.",
+    label: "Enter your Spotify sp_dc cookie and the token for your Spotify streaming server.",
     fields: [
       {
         key: "spDc",
@@ -60,11 +65,18 @@ export const addon = defineAddon<SpotifyConfig>({
         isRequired: true,
       },
       {
-        key: "wvdUrl",
+        key: "serverToken",
         type: "password",
-        title: "Widevine Key URL",
-        placeholder: "Paste the direct URL to your Widevine key file",
-        isRequired: false,
+        title: "Streaming Server Token",
+        placeholder: "Paste the token from your Spotify server .env",
+        isRequired: true,
+      },
+      {
+        key: "serverUrl",
+        type: "url",
+        title: "Streaming Server URL",
+        placeholder: "https://spotify.example.com",
+        isRequired: true,
       },
     ],
   },
@@ -81,24 +93,52 @@ export const addon = defineAddon<SpotifyConfig>({
       throw new Error(`Unknown catalog: ${id}`);
     },
 
-    resolveStream: (config, trackId) => handleStream(config.spDc, trackId, config.wvdUrl),
+    resolveStream: (config, trackId) => handleStream(config.spDc, trackId, config.serverUrl, config.serverToken),
     recordHistory: (config, trackId, event) => handleHistory(config.spDc, trackId, event),
 
     search: (config, query, filter) => handleSearch(config.spDc, query, filter),
 
     getAlbumDetail: (config, id) => handleAlbum(config.spDc, id),
     getPlaylistDetail: (config, id) => handlePlaylist(config.spDc, id),
-    loadMorePlaylistTracks: (config, id, continuation) => handlePlaylistMore(config.spDc, id, continuation),
+    loadMorePlaylistEntries: (config, id, continuation) => handlePlaylistMore(config.spDc, id, continuation),
     getArtistDetail: (config, id) => handleArtist(config.spDc, id),
 
     startQueue: (config, trackId, context) => handleQueueStart(config.spDc, trackId, context),
-    loadMore: (config, token) => handleQueueMore(config.spDc, token),
+    startStation: (config, station) => {
+      if (station.id !== "_dj") throw new Error(`Unknown station: ${station.id}`);
+      return startDJQueue(config.spDc, config.serverUrl, config.serverToken);
+    },
+    loadMore: (config, token) => {
+      try {
+        const parsed = JSON.parse(token);
+        if (parsed?.type === "dj" && typeof parsed.token === "string") {
+          return continueDJQueue(config.spDc, config.serverUrl, config.serverToken, parsed.token);
+        }
+      } catch {}
+      return handleQueueMore(config.spDc, token);
+    },
+    executeAction: (config, action, currentTrack) => {
+      if (action?.payload?.data?.type === "spotifyDjSwitch" && typeof action.payload.data.token === "string") {
+        return switchDJQueue(
+          config.spDc,
+          config.serverUrl,
+          config.serverToken,
+          action.payload.data.token,
+          currentTrack?.id,
+        );
+      }
+      throw new Error(`Unknown queue action: ${action?.id ?? "unknown"}`);
+    },
 
     setLikeStatus: (config, status, trackId) => handleSetLikeStatus(config.spDc, status, trackId),
     getLikeStatus: (config, trackId) => handleGetLikeStatus(config.spDc, trackId),
+    getFavoriteCollection: () => handleFavoriteCollection(),
     addToPlaylist: (config, trackId, playlistId) => handleAddToPlaylist(config.spDc, trackId, playlistId),
     createPlaylist: (config, name) => handleCreatePlaylist(config.spDc, name),
-    removeFromPlaylist: (config, trackId, playlistId) => handleRemoveFromPlaylist(config.spDc, trackId, playlistId),
+    updatePlaylist: (config, request) => handleUpdatePlaylist(config.spDc, request),
+    removeFromPlaylist: (config, entryId, trackId, playlistId) =>
+      handleRemovePlaylistEntry(config.spDc, entryId, trackId, playlistId),
+    deletePlaylist: (config, playlistId) => handleDeletePlaylist(config.spDc, playlistId),
 
     fetchLyrics: (config, title, artist, videoId) => handleLyrics(config.spDc, title, artist, videoId),
     fetchMetadata: (config, title, artist, trackId, trackProvider, thumbnailURL) =>
@@ -116,10 +156,14 @@ export const addon = defineAddon<SpotifyConfig>({
     synthesize: (config, text, voiceId) => handleTTS(config.spDc, text, voiceId),
   },
   capabilities: {
+    supportsStations: true,
+    supportsQueueActions: true,
     supportsLikeStatus: true,
     supportsAddToPlaylist: true,
     supportsCreatePlaylist: true,
+    supportsEditPlaylist: true,
     supportsRemoveFromPlaylist: true,
+    supportsDeletePlaylist: true,
     supportsContinuation: true,
   },
 });

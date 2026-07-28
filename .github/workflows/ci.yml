@@ -24,6 +24,9 @@ jobs:
       - name: Type-check
         run: bun run typecheck
 
+      - name: Run addon tests
+        run: bun test
+
       - name: Build addons
         run: bun run build
 

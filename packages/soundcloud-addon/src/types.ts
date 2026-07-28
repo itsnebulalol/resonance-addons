@@ -18,6 +18,16 @@ export interface Track {
   durationSeconds: number | null;
   thumbnailURL: string | null;
   isExplicit: boolean;
+  isEphemeral?: boolean | null;
+  genres?: string[] | null;
+  releaseYear?: number | null;
+  albumArtists?: ArtistRef[] | null;
+  trackNumber?: number | null;
+  trackTotal?: number | null;
+  discNumber?: number | null;
+  discTotal?: number | null;
+  bpm?: number | null;
+  musicalKey?: string | null;
 }
 
 export interface SearchAlbum {
@@ -46,6 +56,7 @@ export interface SearchPlaylist {
   trackCount: string | null;
   thumbnailURL: string | null;
   canAddTracks?: boolean | null;
+  canDelete?: boolean | null;
 }
 
 export type HomeItem =
@@ -146,9 +157,10 @@ export interface PlaylistDetail {
   description: string | null;
   trackCount: string | null;
   thumbnailURL: string | null;
-  tracks: Track[];
+  entries: PlaylistEntry[];
   continuation: string | null;
-  canEdit?: boolean | null;
+  revision: string | null;
+  editCapabilities: PlaylistEditCapabilities;
 }
 
 export interface ArtistDetail {
@@ -163,7 +175,32 @@ export interface ArtistDetail {
   relatedArtists: SearchArtist[];
 }
 
-export interface TrackPage {
-  tracks: Track[];
+export interface PlaylistEntry {
+  id: string;
+  track: Track;
+}
+
+export interface PlaylistEditCapabilities {
+  canRename: boolean;
+  canChangeArtwork: boolean;
+  canReorder: boolean;
+  canRemoveItems: boolean;
+}
+
+export interface PlaylistArtworkUpdate {
+  data: string;
+  mimeType: string;
+}
+
+export interface PlaylistUpdateRequest {
+  playlistID: string;
+  name: string;
+  entries: PlaylistEntry[];
+  revision: string | null;
+  artwork: PlaylistArtworkUpdate | null;
+}
+
+export interface PlaylistEntryPage {
+  entries: PlaylistEntry[];
   continuation: string | null;
 }

@@ -1,5 +1,6 @@
 import { AddonError } from "@resonance-addons/sdk";
 import { ytFetch } from "../auth";
+import { parseTrackMetadata } from "../track-metadata";
 import type {
   CatalogPage,
   HomeItem,
@@ -131,6 +132,7 @@ function parsePlaylists(renderers: any[]): HomeItem[] {
       trackCount: null,
       thumbnailURL: getThumbnailUrl(renderer),
       canAddTracks: browseId === "VLLM" ? false : containsPlaylistEditEndpoint(renderer) || editableAuthors.has(author),
+      canDelete: browseId === "VLLM" ? false : containsPlaylistEditEndpoint(renderer) || editableAuthors.has(author),
     };
     items.push({ type: "playlist", playlist });
   }
@@ -176,6 +178,7 @@ function parseSongs(rawItems: any[]): HomeItem[] {
       durationSeconds: durationStr ? parseDurationStr(durationStr) : null,
       thumbnailURL: getThumbnailUrl(renderer),
       isExplicit: false,
+      ...parseTrackMetadata(renderer),
     };
     items.push({ type: "track", track });
   }

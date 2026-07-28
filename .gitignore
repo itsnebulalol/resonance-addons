@@ -144,6 +144,10 @@ vite.config.ts.timestamp-*
 
 # Build output
 dist/
+**/target/
+**/__pycache__/
+*.pyc
+servers/**/data/
 
 # extra
 .DS_Store
