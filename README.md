@@ -60,7 +60,6 @@ packages/
   soundcloud-addon/     SoundCloud addon
 public/
   index.html            Static homepage
-servers/                Private submodule containing Apple Music and Spotify servers
 scripts/
   addons.ts             Canonical addon metadata and build list
   build.ts              Builds all addons using Bun.build()
