@@ -113,11 +113,11 @@ export async function handleArtist(config: YouTubeMusicConfig, browseId: string)
           if (pageType === "MUSIC_PAGE_TYPE_ALBUM") {
             const yearMatch = itemSubtitle.match(/\b(19|20)\d{2}\b/);
             
-            // --- THE SILVER BULLET FILTER ---
-            // If the item doesn't have a 4-digit year, it's a compilation/feature. Skip it!
+            // If the item doesn't have a 4-digit year, skip it!
             if (!yearMatch) continue;
 
-            const isSingle = /single/i.test(itemSubtitle);
+            // Strictly check for "Single" as a standalone word
+            const isSingle = /\bsingle\b/i.test(itemSubtitle);
 
             const album: SearchAlbum = {
               id: itemId,
@@ -190,11 +190,10 @@ export async function handleArtist(config: YouTubeMusicConfig, browseId: string)
                     const thumbSources = v.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? v.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? v.thumbnail?.image?.sources ?? [];
                     const yearMatch = itemSubtitle.match(/\b(19|20)\d{2}\b/);
                     
-                    // --- THE SILVER BULLET FILTER (SPIDER EDITION) ---
-                    // Even if the Spider is in the "Appears On" section, it won't save anything without a year!
                     if (!yearMatch) return v;
 
-                    const isSingle = /single|ep/i.test(itemSubtitle) || /single|ep/i.test(itemTitle);
+                    // Strictly check for "Single" as a standalone word
+                    const isSingle = /\bsingle\b/i.test(itemSubtitle);
 
                     const album: SearchAlbum = {
                       id: itemId,
