@@ -230,6 +230,10 @@ export async function handleArtist(config: YouTubeMusicConfig, browseId: string)
       console.error("Pagination top level error:", err);
     }
 
+    // --- SORTING ADDED HERE ---
+    albums.sort((a, b) => parseInt(b.year) - parseInt(a.year));
+    singles.sort((a, b) => parseInt(b.year) - parseInt(a.year));
+
     const detail: ArtistDetail = {
       id: browseId,
       name,
