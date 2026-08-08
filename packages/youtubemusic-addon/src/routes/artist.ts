@@ -49,11 +49,22 @@ export async function handleArtist(config: YouTubeMusicConfig, browseId: string)
     const playlists: SearchPlaylist[] = [];
     const relatedArtists: SearchArtist[] = [];
 
+    const safeSeeAllEndpoints: any[] = [];
+
+    // 1. Process the standard preview items & grab endpoints
     for (const sec of sections) {
       const sectionContents = sec?.itemSectionRenderer?.contents ?? [];
       for (const content of sectionContents) {
         const model = content?.elementRenderer?.newElement?.type?.componentType?.model;
         if (!model) continue;
+
+        // Grab ALL "See All" endpoints blindly (we will filter the junk later by year!)
+        JSON.stringify(model, (k, v) => {
+          if (k === 'browseEndpoint' && v?.browseId && v?.params) {
+            safeSeeAllEndpoints.push(v);
+          }
+          return v;
+        });
 
         const listCarousel = model.musicListItemCarouselModel;
         if (listCarousel) {
@@ -101,22 +112,27 @@ export async function handleArtist(config: YouTubeMusicConfig, browseId: string)
 
           if (pageType === "MUSIC_PAGE_TYPE_ALBUM") {
             const yearMatch = itemSubtitle.match(/\b(19|20)\d{2}\b/);
-            const isSingle = /single/i.test(itemSubtitle);
+            
+            // If the item doesn't have a 4-digit year, skip it!
+            if (!yearMatch) continue;
+
+            // Strictly check for "Single" as a standalone word
+            const isSingle = /\bsingle\b/i.test(itemSubtitle);
 
             const album: SearchAlbum = {
               id: itemId,
               provider: PROVIDER_ID,
               title: itemTitle,
               artists: [{ id: browseId, name }],
-              year: yearMatch ? yearMatch[0] : null,
+              year: yearMatch[0],
               thumbnailURL: itemThumb,
               isExplicit: false,
             };
 
             if (isSingle) {
-              singles.push(album);
+              if (!singles.some(x => x.id === itemId)) singles.push(album);
             } else {
-              albums.push(album);
+              if (!albums.some(x => x.id === itemId)) albums.push(album);
             }
           } else if (pageType === "MUSIC_PAGE_TYPE_ARTIST") {
             relatedArtists.push({
@@ -139,6 +155,84 @@ export async function handleArtist(config: YouTubeMusicConfig, browseId: string)
         }
       }
     }
+
+    // 2. The Spider Pagination Fix
+    try {
+      const uniqueParams = new Set<string>();
+      const uniqueSeeAlls = safeSeeAllEndpoints.filter(ep => {
+        if (uniqueParams.has(ep.params)) return false;
+        uniqueParams.add(ep.params);
+        return true;
+      });
+
+      await Promise.all(uniqueSeeAlls.map(async (ep) => {
+        try {
+          let currentRes = await ytFetch("browse", config, { browseId: ep.browseId, params: ep.params });
+          let pagesFetched = 0;
+
+          while (currentRes && pagesFetched < 4) {
+            pagesFetched++;
+            let nextContinuationToken: string | null = null;
+
+            JSON.stringify(currentRes, (k, v) => {
+              if (k === 'nextContinuationData' && v?.continuation) {
+                nextContinuationToken = v.continuation;
+              }
+
+              if (v && typeof v === 'object') {
+                const ep2 = v.navigationEndpoint?.browseEndpoint ?? v.onTap?.innertubeCommand?.browseEndpoint;
+                if (ep2?.browseId && ep2?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType === "MUSIC_PAGE_TYPE_ALBUM") {
+                  const itemId = ep2.browseId;
+                  const itemTitle = typeof v.title === 'string' ? v.title : v.title?.runs?.[0]?.text ?? "";
+                  const itemSubtitle = typeof v.subtitle === 'string' ? v.subtitle : Array.isArray(v.subtitle?.runs) ? v.subtitle.runs.map((x: any) => x.text).join("") : v.subtitle ?? "";
+
+                  if (itemTitle) {
+                    const thumbSources = v.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? v.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? v.thumbnail?.image?.sources ?? [];
+                    const yearMatch = itemSubtitle.match(/\b(19|20)\d{2}\b/);
+                    
+                    if (!yearMatch) return v;
+
+                    // Strictly check for "Single" as a standalone word
+                    const isSingle = /\bsingle\b/i.test(itemSubtitle);
+
+                    const album: SearchAlbum = {
+                      id: itemId,
+                      provider: PROVIDER_ID,
+                      title: itemTitle,
+                      artists: [{ id: browseId, name }],
+                      year: yearMatch[0],
+                      thumbnailURL: bestThumbnail(thumbSources),
+                      isExplicit: false,
+                    };
+
+                    if (isSingle) {
+                      if (!singles.some(x => x.id === itemId)) singles.push(album);
+                    } else {
+                      if (!albums.some(x => x.id === itemId)) albums.push(album);
+                    }
+                  }
+                }
+              }
+              return v;
+            });
+
+            if (nextContinuationToken) {
+              currentRes = await ytFetch("browse", config, { continuation: nextContinuationToken });
+            } else {
+              break; 
+            }
+          }
+        } catch (err) {
+          console.error("Pagination internal error:", err);
+        }
+      }));
+    } catch (err) {
+      console.error("Pagination top level error:", err);
+    }
+
+    // --- SORTING ADDED HERE ---
+    albums.sort((a, b) => parseInt(b.year) - parseInt(a.year));
+    singles.sort((a, b) => parseInt(b.year) - parseInt(a.year));
 
     const detail: ArtistDetail = {
       id: browseId,
